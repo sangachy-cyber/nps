@@ -28,10 +28,10 @@ logs/
 
 # 忽略数据文件
 data/processed/
-data/raw/
 data/results/
 data/models/
 data/generated/
+data/visualization/
 
 # 忽略临时文件
 tmp/

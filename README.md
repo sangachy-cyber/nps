@@ -70,7 +70,7 @@ uv venv
 source .venv/bin/activate
 
 # 安装依赖
-uv install -r requirements.txt
+uv install
 ```
 
 ## 快速开始
