@@ -1,0 +1,97 @@
+# 忽略Python编译文件
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.so
+*.dylib
+
+# 忽略虚拟环境
+.venv/
+venv/
+env/
+ENV/
+envs/
+
+# 忽略IDE配置
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 忽略日志文件
+logs/
+*.log
+*.log.*
+
+# 忽略数据文件
+data/processed/
+data/raw/
+data/results/
+data/models/
+data/generated/
+
+# 忽略临时文件
+tmp/
+*.tmp
+*.temp
+
+# 忽略测试文件
+.coverage
+htmlcov/
+
+# 忽略构建文件
+dist/
+build/
+*.egg-info/
+
+# 忽略配置文件
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 忽略其他文件
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+
+# 忽略操作系统文件
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# 忽略工具生成的文件
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vuepress/dist/
+
+# 忽略CI/CD配置
+.gitlab-ci.yml
+.travis.yml
+circle.yml
+Jenkinsfile
+
+# 忽略Docker相关
+Dockerfile
+.dockerignore
+.docker/
+
+# 忽略文档生成
+_site/
+_docs/
+.jekyll-cache/
+
+# 忽略其他项目特定文件
+project_rules.md

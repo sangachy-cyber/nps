@@ -1,0 +1,14 @@
+{
+  "segments": [
+    {
+      "start_time": 0,
+      "end_time": 30,
+      "behavior_type": "stable"
+    },
+    {
+      "start_time": 30,
+      "end_time": 60,
+      "behavior_type": "burst_loss"
+    }
+  ]
+}

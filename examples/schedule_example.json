@@ -1,0 +1,24 @@
+{
+  "segments": [
+    {
+      "start_time": 0,
+      "end_time": 120,
+      "behavior_type": "stable"
+    },
+    {
+      "start_time": 120,
+      "end_time": 180,
+      "behavior_type": "burst_loss"
+    },
+    {
+      "start_time": 180,
+      "end_time": 300,
+      "behavior_type": "high_jitter"
+    },
+    {
+      "start_time": 300,
+      "end_time": 600,
+      "behavior_type": "recovery"
+    }
+  ]
+}
