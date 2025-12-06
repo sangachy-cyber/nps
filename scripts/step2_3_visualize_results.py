@@ -11,6 +11,10 @@ sys.path.append(os.path.abspath("src"))
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
+from network_simulation.utils.logger import get_logger
+
+# 初始化日志记录器
+logger = get_logger(__name__)
 
 # 设置中文支持，兼容Windows、MacOS和Linux，Linux系统优先使用文泉驿正黑
 plt.rcParams["font.sans-serif"] = ["WenQuanYi Zen Hei", "SimHei", "Arial Unicode MS", "DejaVu Sans"]
@@ -47,7 +51,7 @@ def visualize_results(
         输出：
             PosixPath('data/results/visualizations/')
     """
-    print(f"正在可视化 {input_original_file} 和 {input_generated_file} 的对比结果")
+    logger.info(f"正在可视化 {input_original_file} 和 {input_generated_file} 的对比结果")
 
     # 加载原始数据和生成数据
     original_df = pd.read_csv(input_original_file, parse_dates=["timestamp"])
@@ -93,7 +97,7 @@ def visualize_results(
     comparison_plot = output_visualization_dir / "comparison.png"
     plt.savefig(comparison_plot, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"时间序列对比图已保存到: {comparison_plot}")
+    logger.info(f"时间序列对比图已保存到: {comparison_plot}")
 
     # 2. 绘制统计分布对比图
     plt.figure(figsize=(15, 6))
@@ -143,7 +147,7 @@ def visualize_results(
     statistics_plot = output_visualization_dir / "statistics.png"
     plt.savefig(statistics_plot, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"统计分布对比图已保存到: {statistics_plot}")
+    logger.info(f"统计分布对比图已保存到: {statistics_plot}")
 
     # 3. 绘制相关性对比图
     plt.figure(figsize=(15, 6))
@@ -170,21 +174,21 @@ def visualize_results(
     correlation_plot = output_visualization_dir / "correlation.png"
     plt.savefig(correlation_plot, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"相关性对比图已保存到: {correlation_plot}")
+    logger.info(f"相关性对比图已保存到: {correlation_plot}")
 
     # 4. 计算并打印统计指标对比
-    print("\n统计对比:")
-    print("=" * 50)
+    logger.info("\n统计对比:")
+    logger.info("=" * 50)
 
     # 延迟统计
     delay_original_stats = original_df["delay"].describe()
     delay_generated_stats = generated_df["delay"].describe()
 
-    print("\n时延统计:")
-    print(
+    logger.info("\n时延统计:")
+    logger.info(
         f"原始数据 - 最小值: {delay_original_stats['min']:.2f}, 平均值: {delay_original_stats['mean']:.2f}, 最大值: {delay_original_stats['max']:.2f}, 标准差: {delay_original_stats['std']:.2f}"
     )
-    print(
+    logger.info(
         f"生成数据 - 最小值: {delay_generated_stats['min']:.2f}, 平均值: {delay_generated_stats['mean']:.2f}, 最大值: {delay_generated_stats['max']:.2f}, 标准差: {delay_generated_stats['std']:.2f}"
     )
 
@@ -192,16 +196,16 @@ def visualize_results(
     loss_original_stats = original_df["loss_rate"].describe()
     loss_generated_stats = generated_df["loss_rate"].describe()
 
-    print("\n丢包率统计:")
-    print(
+    logger.info("\n丢包率统计:")
+    logger.info(
         f"原始数据 - 最小值: {loss_original_stats['min']:.4f}, 平均值: {loss_original_stats['mean']:.4f}, 最大值: {loss_original_stats['max']:.4f}, 标准差: {loss_original_stats['std']:.4f}"
     )
-    print(
+    logger.info(
         f"生成数据 - 最小值: {loss_generated_stats['min']:.4f}, 平均值: {loss_generated_stats['mean']:.4f}, 最大值: {loss_generated_stats['max']:.4f}, 标准差: {loss_generated_stats['std']:.4f}\n"
     )
 
-    print("=" * 50)
-    print("可视化完成！")
+    logger.info("=" * 50)
+    logger.info("可视化完成！")
 
     return output_visualization_dir
 
@@ -219,7 +223,7 @@ def main():
         output_visualization_dir: 可视化结果的输出目录路径
     """
     if len(sys.argv) < 3:
-        print(
+        logger.error(
             "用法: python scripts/step2_3_visualize_results.py <input_generation_dir> <output_visualization_dir>"
         )
         sys.exit(1)
@@ -239,15 +243,15 @@ def main():
     generated_files.sort()
 
     if not original_files:
-        print(f"错误: 在 {input_generation_dir} 中未找到原始样本文件")
+        logger.error(f"错误: 在 {input_generation_dir} 中未找到原始样本文件")
         sys.exit(1)
 
     if not generated_files:
-        print(f"错误: 在 {input_generation_dir} 中未找到生成样本文件")
+        logger.error(f"错误: 在 {input_generation_dir} 中未找到生成样本文件")
         sys.exit(1)
 
     if len(original_files) != len(generated_files):
-        print(
+        logger.warning(
             f"警告: 原始样本文件数 ({len(original_files)}) 与生成样本文件数 ({len(generated_files)}) 不匹配"
         )
 
@@ -263,7 +267,7 @@ def main():
         # 可视化当前组的结果
         visualize_results(original_file, generated_file, group_output_dir)
 
-    print("步骤2.3：可视化结果完成！")
+    logger.info("步骤2.3：可视化结果完成！")
 
 
 if __name__ == "__main__":

@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """
-Simple HTTP server to serve the evaluation report and its images
+用于提供评估报告及其图片的简单HTTP服务器
 """
 
-import os
 import http.server
 import socketserver
 import webbrowser
-import threading
-import time
 from pathlib import Path
 
 
 def serve_report():
-    """Serve the evaluation report using a simple HTTP server"""
+    """使用简单的HTTP服务器提供评估报告服务"""
     # Define the directory to serve
     report_dir = Path("./data/results/evaluation")
     report_dir = report_dir.resolve()

@@ -8,6 +8,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from network_simulation.utils.logger import get_logger
+
+# 初始化日志记录器
+logger = get_logger(__name__)
 
 
 class Time2Vec(nn.Module):
@@ -21,13 +25,15 @@ class Time2Vec(nn.Module):
         self.b0 = nn.Parameter(torch.randn(1, 1))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass
+        """前向传播
+
         Args:
-            x: shape (batch_size, seq_len, 1)
+            x: 输入时间步张量，shape (batch_size, seq_len, 1)
+
         Returns:
-            shape (batch_size, seq_len, d_model)
+            位置编码后的张量，shape (batch_size, seq_len, d_model)
         """
-        # Convert input to float to match parameter dtypes
+        # 将输入转换为float类型以匹配参数类型
         x = x.float()
         v0 = torch.cos(torch.matmul(x, self.w0) + self.b0)
         v1 = self.linear(x)
@@ -52,14 +58,16 @@ class CausalDilatedConv(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass
+        """前向传播
+
         Args:
-            x: shape (batch_size, in_channels, seq_len)
+            x: 输入张量，shape (batch_size, in_channels, seq_len)
+
         Returns:
-            shape (batch_size, out_channels, seq_len)
+            卷积后的张量，shape (batch_size, out_channels, seq_len)
         """
         out = self.conv(x)
-        return out[:, :, : -self.padding]  # Remove padding to maintain causal structure
+        return out[:, :, : -self.padding]  # 移除填充以保持因果结构
 
 
 class UNetBlock(nn.Module):
@@ -85,11 +93,13 @@ class UNetBlock(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass
+        """前向传播
+
         Args:
-            x: shape (batch_size, in_channels, seq_len)
+            x: 输入张量，shape (batch_size, in_channels, seq_len)
+
         Returns:
-            shape (batch_size, out_channels, seq_len)
+            经过UNet块处理后的张量，shape (batch_size, out_channels, seq_len)
         """
         residual = self.shortcut(x)
 
@@ -120,18 +130,20 @@ class CrossAttention(nn.Module):
     def forward(
         self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor
     ) -> torch.Tensor:
-        """Forward pass
+        """前向传播
+
         Args:
-            query: shape (batch_size, seq_len, d_model)
-            key: shape (batch_size, seq_len, d_model)
-            value: shape (batch_size, seq_len, d_model)
+            query: 查询张量，shape (batch_size, seq_len, d_model)
+            key: 键张量，shape (batch_size, seq_len, d_model)
+            value: 值张量，shape (batch_size, seq_len, d_model)
+
         Returns:
-            shape (batch_size, seq_len, d_model)
+            注意力机制处理后的张量，shape (batch_size, seq_len, d_model)
         """
         batch_size = query.size(0)
         seq_len = query.size(1)
 
-        # Linear projections
+        # 线性投影
         Q = (
             self.q_linear(query)
             .view(batch_size, seq_len, self.num_heads, self.head_dim)
@@ -148,11 +160,11 @@ class CrossAttention(nn.Module):
             .transpose(1, 2)
         )
 
-        # Scaled dot-product attention
+        # 缩放点积注意力
         scores = torch.matmul(Q, K.transpose(-2, -1)) / np.sqrt(self.head_dim)
         attention = F.softmax(scores, dim=-1)
 
-        # Output
+        # 输出
         out = (
             torch.matmul(attention, V)
             .transpose(1, 2)
@@ -172,11 +184,13 @@ class BehaviorEmbedding(nn.Module):
         self.dropout = nn.Dropout(0.1)
 
     def forward(self, behavior_ids: torch.Tensor) -> torch.Tensor:
-        """Forward pass
+        """前向传播
+
         Args:
-            behavior_ids: shape (batch_size, seq_len)
+            behavior_ids: 行为ID张量，shape (batch_size, seq_len)
+
         Returns:
-            shape (batch_size, seq_len, d_embed)
+            行为嵌入向量，shape (batch_size, seq_len, d_embed)
         """
         return self.dropout(self.embedding(behavior_ids))
 
@@ -231,13 +245,15 @@ class UNet(nn.Module):
     def forward(
         self, x: torch.Tensor, t: torch.Tensor, behavior_embed: torch.Tensor
     ) -> torch.Tensor:
-        """Forward pass
+        """前向传播
+
         Args:
-            x: shape (batch_size, seq_len, input_dim)
-            t: shape (batch_size, seq_len, 1) - timestep
-            behavior_embed: shape (batch_size, seq_len, behavior_embed_dim)
+            x: 输入张量，shape (batch_size, seq_len, input_dim)
+            t: 时间步张量，shape (batch_size, seq_len, 1)
+            behavior_embed: 行为嵌入向量，shape (batch_size, seq_len, behavior_embed_dim)
+
         Returns:
-            shape (batch_size, seq_len, input_dim)
+            网络输出张量，shape (batch_size, seq_len, input_dim)
         """
         batch_size, seq_len, input_dim = x.shape
 
@@ -343,25 +359,42 @@ class ConditionDiffusionModel(nn.Module):
 
     def __init__(
         self,
-        input_dim: int = 2,
-        num_behaviors: int = 10,
-        behavior_embed_dim: int = 32,
-        T: int = 1000,
+        input_dim: int = None,
+        num_behaviors: int = None,
+        behavior_embed_dim: int = None,
+        T: int = None,
     ):
         super().__init__()
-        self.input_dim = input_dim
-        self.num_behaviors = num_behaviors
-        self.behavior_embed_dim = behavior_embed_dim
-        self.T = T
+        # 导入默认配置
+        try:
+            from ...config import (
+                DEFAULT_INPUT_DIM,
+                DEFAULT_BEHAVIOR_EMBED_DIM,
+                DEFAULT_T
+            )
+            # 使用默认配置或传入的参数
+            self.input_dim = input_dim or DEFAULT_INPUT_DIM
+            self.behavior_embed_dim = behavior_embed_dim or DEFAULT_BEHAVIOR_EMBED_DIM
+            self.T = T or DEFAULT_T
+        except ImportError:
+            # 导入失败时使用默认值
+            self.input_dim = input_dim or 2
+            self.behavior_embed_dim = behavior_embed_dim or 32
+            self.T = T or 1000
+
+        # 设置行为数量，默认为10
+        self.num_behaviors = num_behaviors or 10
+
+        logger.info(f"初始化条件扩散模型，参数: input_dim={self.input_dim}, num_behaviors={self.num_behaviors}, behavior_embed_dim={self.behavior_embed_dim}, T={self.T}")
 
         # 行为嵌入层
-        self.behavior_embedding = BehaviorEmbedding(num_behaviors, behavior_embed_dim)
+        self.behavior_embedding = BehaviorEmbedding(self.num_behaviors, self.behavior_embed_dim)
 
         # U-Net主干
-        self.unet = UNet(input_dim, behavior_embed_dim)
+        self.unet = UNet(self.input_dim, self.behavior_embed_dim)
 
         # 扩散调度
-        self.schedule = DiffusionSchedule(T)
+        self.schedule = DiffusionSchedule(self.T)
 
     def forward(
         self, x: torch.Tensor, t: torch.Tensor, behavior_ids: torch.Tensor
@@ -397,10 +430,14 @@ class ConditionDiffusionModel(nn.Module):
             生成的样本，shape (batch_size, seq_len, input_dim)
         """
         batch_size, seq_len = behavior_ids.shape
+        logger.info(f"开始生成样本，batch_size={batch_size}, seq_len={seq_len}, device={device}")
 
         # 初始噪声
         if noise is None:
+            logger.debug("使用随机初始噪声")
             noise = torch.randn(batch_size, seq_len, self.input_dim, device=device)
+        else:
+            logger.debug("使用自定义初始噪声")
 
         x = noise
 
@@ -412,6 +449,7 @@ class ConditionDiffusionModel(nn.Module):
         step_skip = 4
         steps = list(range(self.T - 1, -1, -step_skip))
         num_steps = len(steps)
+        logger.info(f"使用 {num_steps} 步采样（原 {self.T} 步的 25%）")
 
         for i, t in enumerate(steps):
             # 创建时间步张量
@@ -427,7 +465,6 @@ class ConditionDiffusionModel(nn.Module):
             beta_t = self.schedule.get_beta_t(t)
             alpha_t = self.schedule.alpha[t]
             alpha_cumprod_t = self.schedule.get_alpha_cumprod_t(t)
-            alpha_cumprod_prev = self.schedule.alpha_cumprod_prev[t]
 
             # 计算均值和方差
             if t > 0:
@@ -451,12 +488,12 @@ class ConditionDiffusionModel(nn.Module):
                 x[:, :, 0] = torch.clip(x[:, :, 0], min=-1.0, max=1.0)
                 # 对丢包率施加约束，因为丢包率的归一化范围固定为[-1, 1]
                 x[:, :, 1] = torch.clip(x[:, :, 1], min=-1.0, max=1.0)
+                logger.debug(f"采样步骤 {i+1}/{num_steps} (t={t}) 应用物理约束")
 
         # 最终约束处理
-        # 对延迟施加合理的约束，确保生成的归一化延迟值在[-1, 1]范围内
         x[:, :, 0] = torch.clip(x[:, :, 0], min=-1.0, max=1.0)
-        # 对丢包率施加约束，因为丢包率的归一化范围固定为[-1, 1]
         x[:, :, 1] = torch.clip(x[:, :, 1], min=-1.0, max=1.0)
+        logger.info("采样完成，应用最终约束")
 
         return x
 
@@ -496,28 +533,28 @@ class ConditionDiffusionModel(nn.Module):
         # 计算原始数据的统计特性
         x_0_mean = torch.mean(x_0, dim=1, keepdim=True)  # (batch_size, 1, input_dim)
         x_0_var = torch.var(x_0, dim=1, keepdim=True)    # (batch_size, 1, input_dim)
-        
+
         # 计算去噪后的数据（使用噪声预测）
         # 简化的去噪过程，用于损失计算
         # 确保调度参数与输入在同一设备上
         device = x_0.device
         alpha = self.schedule.alpha.to(device)  # 移动到正确设备
         alpha_cumprod = self.schedule.alpha_cumprod.to(device)  # 移动到正确设备
-        
+
         # 获取当前设备上的时间步值
         t_device = t.to(device)
-        
+
         # 使用设备匹配的张量进行计算
         alpha_t = alpha[t_device].unsqueeze(-1)  # (batch_size, seq_len, 1)
         alpha_cumprod_t = alpha_cumprod[t_device].unsqueeze(-1)  # (batch_size, seq_len, 1)
-        
+
         # 简化的去噪计算
         x_pred = (x_t - noise_pred * torch.sqrt(1 - alpha_cumprod_t)) / torch.sqrt(alpha_t)
-        
+
         # 计算去噪后数据的统计特性
         x_pred_mean = torch.mean(x_pred, dim=1, keepdim=True)  # (batch_size, 1, input_dim)
         x_pred_var = torch.var(x_pred, dim=1, keepdim=True)    # (batch_size, 1, input_dim)
-        
+
         # 统计特性损失（均值和方差匹配）
         mean_loss = F.mse_loss(x_pred_mean, x_0_mean)
         var_loss = F.mse_loss(x_pred_var, x_0_var)
@@ -529,25 +566,25 @@ class ConditionDiffusionModel(nn.Module):
             # x shape: (batch_size, seq_len, input_dim)
             batch_size, seq_len, input_dim = x.shape
             x = x.transpose(1, 2)  # (batch_size, input_dim, seq_len)
-            
+
             # 计算均值
             mean = torch.mean(x, dim=2, keepdim=True)  # (batch_size, input_dim, 1)
-            
+
             # 标准化
             x_std = x - mean  # (batch_size, input_dim, seq_len)
             var = torch.sum(x_std ** 2, dim=2, keepdim=True)  # (batch_size, input_dim, 1)
-            
+
             # 计算自协方差
             cov = torch.sum(x_std[:, :, :-lag] * x_std[:, :, lag:], dim=2, keepdim=True)
-            
+
             # 计算自相关系数
             corr = cov / (var + 1e-8)
             return corr.squeeze(-1)  # (batch_size, input_dim)
-        
+
         # 计算自相关系数
         x_0_acf = autocorrelation(x_0)
         x_pred_acf = autocorrelation(x_pred)
-        
+
         # 自相关系数损失
         acf_loss = F.mse_loss(x_pred_acf, x_0_acf)
 
@@ -556,19 +593,19 @@ class ConditionDiffusionModel(nn.Module):
             """计算Wasserstein距离（基于排序）"""
             # x, y shape: (batch_size, seq_len, input_dim)
             batch_size, seq_len, input_dim = x.shape
-            
+
             # 对每个维度进行排序
             x_sorted, _ = torch.sort(x, dim=1)
             y_sorted, _ = torch.sort(y, dim=1)
-            
+
             # 计算累积距离
             dist = torch.mean(torch.abs(x_sorted - y_sorted), dim=(1, 2))  # (batch_size,)
             return dist
-        
+
         # 计算Wasserstein距离损失
         wasserstein_loss = wasserstein_distance(x_0, x_pred)
         wasserstein_loss = torch.mean(wasserstein_loss)  # 计算批次平均
-        
+
         # 简化损失函数，只保留高效的损失函数
         # 移除基于KDE的损失函数，减少内存开销
         # MSE损失（基础损失） + 统计特性损失 + 时序特性损失 + Wasserstein距离损失

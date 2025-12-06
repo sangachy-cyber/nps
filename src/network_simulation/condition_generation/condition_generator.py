@@ -11,17 +11,21 @@ import json
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from ..utils.logger import get_logger
 from .diffusion_model import ConditionDiffusionModel
 from .constraint_injector import ConstraintInjector
 
 
+logger = get_logger(__name__)
+
 class ConditionGenerator:
     """Generates network simulation data based on behavior conditions"""
 
-    def __init__(self, valid_loss_values: List[float] = None):
+    def __init__(self, valid_loss_values: List[float] = None, config: dict = None):
         self.time_granularity = 0.1  # 100ms
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.valid_loss_values = valid_loss_values or [0.0, 1 / 3, 0.5, 2 / 3, 1.0]
+        self.config = config or {}
 
         # Initialize constraint injector
         self.constraint_injector = ConstraintInjector(self.valid_loss_values)
@@ -32,12 +36,27 @@ class ConditionGenerator:
 
     def _init_diffusion_model(self):
         """初始化扩散模型"""
-        self.diffusion_model = ConditionDiffusionModel(
-            input_dim=2,
-            num_behaviors=10,  # 默认支持10种行为
-            behavior_embed_dim=32,
-            T=1000,
-        )
+        # 导入默认配置
+        try:
+            from ...config import (
+                DEFAULT_INPUT_DIM,
+                DEFAULT_BEHAVIOR_EMBED_DIM,
+                DEFAULT_T
+            )
+            self.diffusion_model = ConditionDiffusionModel(
+                input_dim=DEFAULT_INPUT_DIM,
+                num_behaviors=10,  # 默认支持10种行为
+                behavior_embed_dim=DEFAULT_BEHAVIOR_EMBED_DIM,
+                T=DEFAULT_T,
+            )
+        except ImportError:
+            # 导入失败时使用默认值
+            self.diffusion_model = ConditionDiffusionModel(
+                input_dim=2,
+                num_behaviors=10,
+                behavior_embed_dim=32,
+                T=1000,
+            )
         self.diffusion_model.to(self.device)
 
     def generate(
@@ -72,8 +91,8 @@ class ConditionGenerator:
             delay_sequence, loss_sequence
         )
         if not validation["all_valid"]:
-            print(
-                "Warning: Generated sequence has physical constraint violations. Applying post-processing."
+            logger.warning(
+                "Generated sequence has physical constraint violations. Applying post-processing."
             )
             # 这里可以添加后处理逻辑，但当前实现中_generate_behavior_segment已经确保了基本合理性
 

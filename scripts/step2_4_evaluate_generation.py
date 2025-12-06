@@ -10,6 +10,10 @@ import os
 import sys
 from pathlib import Path
 import glob
+from network_simulation.utils.logger import get_logger
+
+# 初始化日志记录器
+logger = get_logger(__name__)
 
 
 # 计算统计指标
@@ -132,9 +136,9 @@ def evaluate_single_sample(original_file, generated_file, output_dir):
     report.append("评估完成!")
     report.append("=" * 60)
 
-    # 打印评估报告
+    # 记录评估报告
     report_text = "\n".join(report)
-    print(report_text)
+    logger.info(report_text)
 
     # 保存评估报告
     group_name = (
@@ -163,7 +167,7 @@ def evaluate_single_sample(original_file, generated_file, output_dir):
 def main():
     """主函数入口"""
     if len(sys.argv) < 2:
-        print(
+        logger.error(
             "用法: python scripts/step2_4_evaluate_generation.py <input_generation_dir> [output_evaluation_dir]"
         )
         sys.exit(1)
@@ -175,9 +179,11 @@ def main():
     else:
         # 默认输出目录
         output_evaluation_dir = input_generation_dir.parent / "evaluation"
+        logger.info(f"使用默认输出目录: {output_evaluation_dir}")
 
     # 确保输出目录存在
     output_evaluation_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"确保输出目录存在: {output_evaluation_dir}")
 
     # 查找所有原始样本和生成样本文件
     original_files = sorted(
@@ -186,23 +192,25 @@ def main():
     generated_files = sorted(
         glob.glob(str(input_generation_dir / "generated_sample_6000*.csv"))
     )
+    logger.info(f"找到原始样本文件数: {len(original_files)}, 生成样本文件数: {len(generated_files)}")
 
     if not original_files:
-        print(f"错误: 在 {input_generation_dir} 中未找到原始样本文件")
+        logger.error(f"错误: 在 {input_generation_dir} 中未找到原始样本文件")
         sys.exit(1)
 
     if not generated_files:
-        print(f"错误: 在 {input_generation_dir} 中未找到生成样本文件")
+        logger.error(f"错误: 在 {input_generation_dir} 中未找到生成样本文件")
         sys.exit(1)
 
     if len(original_files) != len(generated_files):
-        print(
+        logger.warning(
             f"警告: 原始样本文件数 ({len(original_files)}) 与生成样本文件数 ({len(generated_files)}) 不匹配"
         )
 
     # 评估所有样本对
     all_results = []
     for original_file, generated_file in zip(original_files, generated_files):
+        logger.info(f"开始评估样本对: {os.path.basename(original_file)} 和 {os.path.basename(generated_file)}")
         result = evaluate_single_sample(
             original_file, generated_file, output_evaluation_dir
         )
@@ -211,7 +219,7 @@ def main():
     # 生成汇总报告
     generate_summary_report(all_results, output_evaluation_dir)
 
-    print(
+    logger.info(
         f"\n所有样本评估完成！汇总报告已保存到: {output_evaluation_dir / 'summary_report.txt'}"
     )
 

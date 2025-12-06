@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Convert Markdown report to HTML format
+将Markdown报告转换为HTML格式
 """
 
 import markdown
@@ -8,67 +8,73 @@ from pathlib import Path
 
 
 def convert_markdown_to_html(markdown_path: Path, html_path: Path) -> None:
-    """Convert Markdown file to HTML file"""
-    # Read the Markdown content
+    """将Markdown文件转换为HTML文件
+
+    Args:
+        markdown_path: Markdown文件路径
+        html_path: 生成的HTML文件路径
+    """
+    # 读取Markdown内容
     with open(markdown_path, "r", encoding="utf-8") as f:
         markdown_content = f.read()
 
-    # Replace image references with actual image tags in Markdown content first
+    # 首先替换Markdown内容中的图片引用为实际的图片标签
     import re
     import glob
+    from datetime import datetime
 
-    # Pattern to match image references like: - **聚类指标**：`clustering_metrics.png`
+    # 匹配图片引用的正则表达式，例如：- **聚类指标**：`clustering_metrics.png`
     image_pattern = r"- \*\*(.*?)\*\*：`(.*?)`"
 
     def replace_image_reference(match):
         title = match.group(1)
         file_path = match.group(2)
 
-        # Check if it's a PNG image
+        # 检查是否为PNG图片
         if file_path.endswith(".png"):
-            # Return image tag for PNG files
+            # 为PNG文件返回图片标签
             return f'<div style="margin: 20px 0; text-align: center;"><h4>{title}</h4><img src="{file_path}" alt="{title}" style="max-width: 100%; height: auto; box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23); border-radius: 4px;"></div>'
         elif file_path.endswith(".html"):
-            # Return link for HTML files
+            # 为HTML文件返回链接
             return f'<div style="margin: 20px 0; text-align: center;"><h4>{title}</h4><a href="{file_path}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold;">查看{title}</a></div>'
         else:
-            # For other file types, return original format
+            # 对于其他文件类型，返回原始格式
             return f"- **{title}**：`{file_path}`"
 
-    # Pattern to match random sample sections like: - 行为 0：`behavior_0_sample_*.png`
+    # 匹配随机样本部分的正则表达式，例如：- 行为 0：`behavior_0_sample_*.png`
     random_sample_pattern = r"- 行为 (\d+)：`(behavior_\d+_sample_\*\.png)`"
 
     def replace_random_samples(match):
         behavior_id = match.group(1)
         wildcard_pattern = match.group(2)
 
-        # Get the actual files matching the wildcard pattern
+        # 获取匹配通配符模式的实际文件
         report_dir = str(Path(markdown_path).parent)
         actual_files = sorted(glob.glob(f"{report_dir}/{wildcard_pattern}"))
 
         if not actual_files:
-            # If no files match, return original text
+            # 如果没有匹配的文件，返回原始文本
             return f"- 行为 {behavior_id}：`{wildcard_pattern}`"
 
-        # Generate image tags for each actual file
+        # 为每个实际文件生成图片标签
         result = f"<h4>行为 {behavior_id} 样本</h4>"
         result += '<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">'
 
         for file_path in actual_files:
-            # Get just the filename without the directory
+            # 获取不带目录的文件名
             filename = Path(file_path).name
-            # Generate image tag
+            # 生成图片标签
             result += f'<div style="flex: 1 1 200px; max-width: 300px;"><img src="{filename}" alt="行为 {behavior_id} 样本" style="max-width: 100%; height: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 4px;"></div>'
 
         result += "</div>"
         return result
 
-    # Replace all image references in the Markdown content
+    # 替换Markdown内容中所有的图片引用
     markdown_content = re.sub(
         image_pattern, replace_image_reference, markdown_content, flags=re.MULTILINE
     )
 
-    # Replace random sample wildcards with actual image tags
+    # 替换随机样本通配符为实际图片标签
     markdown_content = re.sub(
         random_sample_pattern,
         replace_random_samples,
@@ -76,13 +82,13 @@ def convert_markdown_to_html(markdown_path: Path, html_path: Path) -> None:
         flags=re.MULTILINE,
     )
 
-    # Convert Markdown to HTML
+    # 将Markdown转换为HTML
     html_content = markdown.markdown(
         markdown_content, extensions=["tables", "fenced_code"]
     )
 
-    # Add HTML header and footer
-    # Use a safer approach with string concatenation
+    # 添加HTML页眉和页脚
+    # 使用更安全的字符串拼接方法
     html_header = """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -204,22 +210,22 @@ def convert_markdown_to_html(markdown_path: Path, html_path: Path) -> None:
 </body>
 </html>"""
 
-    # Combine header, content, and footer
+    # 合并页眉、内容和页脚
     full_html = (
         html_header
         + html_content
-        + html_footer.format(Path(markdown_path).stat().st_mtime)
+        + html_footer.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     )
 
-    # Write the HTML content to file
+    # 将HTML内容写入文件
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(full_html)
 
-    print(f"Successfully converted {markdown_path} to {html_path}")
+    print(f"成功将 {markdown_path} 转换为 {html_path}")
 
 
 def main():
-    # Define paths
+    # 定义路径
     data_dir = Path("./data")
     markdown_path = (
         data_dir / "results" / "evaluation" / "comprehensive_evaluation_report_zh.md"
@@ -228,7 +234,7 @@ def main():
         data_dir / "results" / "evaluation" / "comprehensive_evaluation_report_zh.html"
     )
 
-    # Convert Markdown to HTML
+    # 将Markdown转换为HTML
     convert_markdown_to_html(markdown_path, html_path)
 
 

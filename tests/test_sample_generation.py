@@ -1,91 +1,123 @@
 #!/usr/bin/env python3
 """
-测试样本生成脚本
+样本生成测试用例
 """
 
-import sys
-import os
-
-sys.path.append(os.path.abspath("src"))
-
+import pytest
 import torch
 import numpy as np
-import pandas as pd
 from pathlib import Path
-from network_simulation.condition_generation.diffusion_model import (
-    ConditionDiffusionModel,
-)
-from network_simulation.condition_generation.constraint_injector import (
-    ConstraintInjector,
-)
+from src.network_simulation.condition_generation.diffusion_model import ConditionDiffusionModel
+from src.network_simulation.condition_generation.constraint_injector import ConstraintInjector
 
 
-def test_sample_generation():
-    """测试样本生成"""
-    print("开始测试样本生成...")
+@pytest.fixture
+def device():
+    """获取可用设备"""
+    return torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
-    # 设置设备
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-    print(f"使用设备: {device}")
 
-    # 加载模型
-    model_path = Path(
-        "/Users/xiaotuanzi/PycharmProjects/NPS/data/results/e2e_pipeline/train_results/diffusion_model_final.pth"
-    )
-    print(f"正在加载模型: {model_path}")
+@pytest.fixture
+def constraint_injector():
+    """初始化约束注入器"""
+    valid_loss_values = [0.0, 0.5, 1.0]
+    return ConstraintInjector(valid_loss_values)
 
-    # 加载模型权重
-    checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-    behavior_mapping = checkpoint["behavior_mapping"]
-    num_behaviors = len(behavior_mapping)
 
-    # 初始化模型
+@pytest.fixture
+def mock_checkpoint():
+    """创建模拟的模型检查点"""
+    return {
+        "behavior_mapping": {"stable": 0, "burst": 1, "high_jitter": 2},
+        "model_state_dict": {}
+    }
+
+
+@pytest.fixture
+def sample_behavior_ids(device):
+    """创建测试用的行为ID序列"""
+    batch_size = 1
+    seq_len = 100
+    return torch.full((batch_size, seq_len), 1, device=device, dtype=torch.long)
+
+
+@pytest.fixture
+def diffusion_model(device):
+    """初始化扩散模型"""
     model = ConditionDiffusionModel(
         input_dim=2,  # 输入维度：延迟和丢包率
-        num_behaviors=num_behaviors,
+        num_behaviors=3,
         behavior_embed_dim=32,  # 行为嵌入维度
         T=1000,  # 扩散步数
     )
-
-    # 加载模型状态
-    model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
     model.eval()
+    return model
 
-    print("模型加载完成！")
 
-    # 创建一个简单的行为ID序列
-    batch_size = 1
-    seq_len = 1000  # 生成1000个样本，而不是6000个
-    behavior_ids = torch.full((batch_size, seq_len), 1, device=device, dtype=torch.long)
+def test_diffusion_model_initialization(diffusion_model, device):
+    """测试扩散模型初始化"""
+    assert diffusion_model is not None
+    # 检查模型参数是否已移至正确设备
+    for param in diffusion_model.parameters():
+        assert param.device.type == device.type
 
-    print(f"生成样本：batch_size={batch_size}, seq_len={seq_len}")
 
+def test_sample_generation(diffusion_model, sample_behavior_ids, constraint_injector):
+    """测试样本生成"""
     # 生成样本
     with torch.no_grad():
-        generated = model.sample(behavior_ids, device)
-
-    print("样本生成完成！")
-    print(f"生成样本形状: {generated.shape}")
-
-    # 反归一化
-    delay_scaler_mean_ = checkpoint["delay_scaler_mean_"]
-    delay_scaler_scale_ = checkpoint["delay_scaler_scale_"]
-
+        generated = diffusion_model.sample(sample_behavior_ids, sample_behavior_ids.device)
+    
+    # 验证生成结果的形状
+    assert generated.shape == sample_behavior_ids.shape + (2,)
+    
+    # 转换为numpy数组
     generated_np = generated.cpu().numpy()[0]
-
-    # 反归一化延迟
+    
+    # 验证生成的延迟和丢包率
     delay_norm = generated_np[:, 0]
-    delay = (delay_norm * delay_scaler_scale_) + delay_scaler_mean_
-
-    # 反归一化丢包率
     loss_norm = generated_np[:, 1]
+    
+    # 验证延迟范围
+    delay = (delay_norm + 1) * 100
+    delay = np.clip(delay, 0, None)
+    assert np.all(delay >= 0)  # 延迟不能为负
+    
+    # 验证丢包率处理
+    loss_rate = constraint_injector.process_loss_rate(loss_norm)
+    assert len(loss_rate) == len(loss_norm)
+    for lr in loss_rate:
+        assert lr in constraint_injector.valid_loss_values
 
-    print(f"生成的延迟范围: {delay.min():.2f} - {delay.max():.2f} ms")
-    print(f"生成的丢包率范围: {loss_norm.min():.4f} - {loss_norm.max():.4f}")
 
-    print("测试完成！")
+def test_sample_generation_shape(diffusion_model, device):
+    """测试不同形状的样本生成"""
+    batch_sizes = [1, 2]
+    seq_lens = [100, 200]
+    
+    for batch_size in batch_sizes:
+        for seq_len in seq_lens:
+            behavior_ids = torch.randint(0, 3, (batch_size, seq_len), device=device)
+            
+            with torch.no_grad():
+                generated = diffusion_model.sample(behavior_ids, device)
+            
+            assert generated.shape == (batch_size, seq_len, 2)
 
 
-if __name__ == "__main__":
-    test_sample_generation()
+def test_constraint_injector_processing(constraint_injector):
+    """测试约束注入器处理"""
+    # 创建测试数据
+    loss_values = np.array([-0.5, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5])
+    
+    # 处理丢包率
+    processed = constraint_injector.process_loss_rate(loss_values)
+    
+    # 验证处理结果
+    for lr in processed:
+        assert lr in constraint_injector.valid_loss_values
+    
+    # 验证处理后的丢包率范围
+    assert np.all(np.array(processed) >= 0)
+    assert np.all(np.array(processed) <= 1)

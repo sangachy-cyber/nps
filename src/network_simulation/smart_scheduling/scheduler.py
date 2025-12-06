@@ -8,6 +8,10 @@ import json
 import numpy as np
 from pathlib import Path
 from typing import Dict, Tuple
+from network_simulation.utils.logger import get_logger
+
+# 初始化日志记录器
+logger = get_logger(__name__)
 
 
 class SmartScheduler:
@@ -18,19 +22,25 @@ class SmartScheduler:
 
     def load_schedule(self, schedule_path: Path) -> Dict:
         """Load behavior schedule from file"""
+        logger.info(f"从文件加载调度表: {schedule_path}")
         with open(schedule_path, "r") as f:
             schedule = json.load(f)
+        logger.debug(f"成功加载调度表，包含 {len(schedule.get('segments', []))} 个行为段")
         return schedule
 
     def load_patterns(self, patterns_dir: Path) -> Dict:
         """Load discovered patterns from directory"""
+        logger.info(f"从目录加载行为模式: {patterns_dir}")
+
         # Load behavior labels
         with open(patterns_dir / "behavior_labels.json", "r") as f:
             behavior_labels = json.load(f)
+        logger.debug(f"成功加载行为标签，包含 {len(behavior_labels.get('cluster_stats', []))} 个簇")
 
         # Load transition graph
         with open(patterns_dir / "behavior_transition_graph.json", "r") as f:
             transition_graph = json.load(f)
+        logger.debug("成功加载行为转移图")
 
         patterns = {
             "behavior_labels": behavior_labels,
@@ -42,13 +52,16 @@ class SmartScheduler:
 
     def validate_schedule(self, schedule: Dict, patterns: Dict) -> Tuple[bool, str]:
         """Validate if the schedule is reasonable based on transition probabilities"""
+        logger.info("开始验证调度表合理性")
         transition_matrix = np.array(patterns["transition_graph"]["transition_matrix"])
         segments = schedule["segments"]
 
         # Check if segments are in order and don't overlap
         for i in range(len(segments) - 1):
             if segments[i]["end_time"] > segments[i + 1]["start_time"]:
-                return False, f"Segments {i} and {i + 1} overlap"
+                message = f"分段 {i} 和 {i + 1} 重叠"
+                logger.warning(f"调度表验证失败: {message}")
+                return False, message
 
         # Check if transition probabilities are reasonable
         for i in range(len(segments) - 1):
@@ -66,12 +79,14 @@ class SmartScheduler:
 
             # Check transition probability
             transition_prob = transition_matrix[current_cluster][next_cluster]
-            if transition_prob < 0.01:  # Threshold for reasonable transition
-                return (
-                    False,
-                    f"Transition from {current_behavior} to {next_behavior} is unlikely (probability: {transition_prob:.4f})",
-                )
+            logger.debug(f"从 {current_behavior} 到 {next_behavior} 的转移概率: {transition_prob:.4f}")
 
+            if transition_prob < 0.01:  # Threshold for reasonable transition
+                message = f"从 {current_behavior} 到 {next_behavior} 的转移不太可能发生 (概率: {transition_prob:.4f})"
+                logger.warning(f"调度表验证失败: {message}")
+                return False, message
+
+        logger.info("调度表验证通过")
         return True, "Schedule is valid"
 
     def optimize_schedule(self, schedule: Dict, patterns: Dict) -> Dict:
@@ -82,6 +97,7 @@ class SmartScheduler:
 
     def insert_transition_segments(self, schedule: Dict, patterns: Dict) -> Dict:
         """Insert transition segments between behavior segments"""
+        logger.info("开始在行为段之间插入过渡段")
         optimized_segments = []
         segments = schedule["segments"]
 
@@ -96,9 +112,11 @@ class SmartScheduler:
                     current_segment, next_segment, patterns
                 )
                 optimized_segments.append(transition_segment)
+                logger.debug(f"插入从 {current_segment['behavior_type']} 到 {next_segment['behavior_type']} 的过渡段")
 
         optimized_schedule = schedule.copy()
         optimized_schedule["segments"] = optimized_segments
+        logger.info(f"过渡段插入完成，优化后的调度表包含 {len(optimized_segments)} 个段（原 {len(segments)} 个）")
         return optimized_schedule
 
     def _create_transition_segment(

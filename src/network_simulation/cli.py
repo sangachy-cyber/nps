@@ -7,6 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from network_simulation.utils.logger import get_logger
 from network_simulation.data_processing.data_loader import DataLoader
 from network_simulation.feature_extraction.feature_extractor import FeatureExtractor
 from network_simulation.pattern_discovery.pattern_identifier import PatternIdentifier
@@ -17,6 +18,8 @@ from network_simulation.smart_scheduling.scheduler import SmartScheduler
 from network_simulation.evaluation.evaluator import Evaluator
 from network_simulation.visualization.visualizer import Visualizer
 
+
+logger = get_logger(__name__)
 
 def main():
     """CLI的主入口点
@@ -158,7 +161,7 @@ def main():
             data = data_loader.load(args.input)
             processed_data = data_loader.preprocess(data)
             data_loader.save(processed_data, args.output / "processed_data.csv")
-            print(f"处理后的数据已保存到 {args.output / 'processed_data.csv'}")
+            logger.info(f"处理后的数据已保存到 {args.output / 'processed_data.csv'}")
 
         elif args.command == "extract-features":
             feature_extractor = FeatureExtractor()
@@ -177,11 +180,11 @@ def main():
 
                 combined_features = pd.concat(all_features, ignore_index=True)
                 feature_extractor.save(combined_features, args.output / "features.csv")
-                print(
+                logger.info(
                     f"从 {len(args.input)} 个文件中提取特征，并保存到 {args.output / 'features.csv'}"
                 )
             else:
-                print("未从输入文件中提取到特征。")
+                logger.warning("未从输入文件中提取到特征。")
 
         elif args.command == "discover-patterns":
             pattern_identifier = PatternIdentifier(method=args.method)
@@ -198,7 +201,7 @@ def main():
             pattern_identifier.save(patterns, args.output, features)
 
             # 使用 Visualizer 生成 HTML 报告
-            print("正在生成 HTML 报告...")
+            logger.info("正在生成 HTML 报告...")
             visualizer = Visualizer(args.output)
             # 提取用于可视化的特征列
             X = features[pattern_identifier.feature_columns].values
@@ -206,7 +209,7 @@ def main():
                 patterns, X, pattern_identifier.feature_columns, raw_data, features
             )
 
-            print(f"行为模式已发现并保存到 {args.output}")
+            logger.info(f"行为模式已发现并保存到 {args.output}")
 
         elif args.command == "generate-simulation":
             scheduler = SmartScheduler()
@@ -219,17 +222,17 @@ def main():
             )
 
             generator.save(simulation_data, args.output / "simulation_data.csv")
-            print(f"模拟数据已生成并保存到 {args.output / 'simulation_data.csv'}")
+            logger.info(f"模拟数据已生成并保存到 {args.output / 'simulation_data.csv'}")
 
         elif args.command == "evaluate-simulation":
             evaluator = Evaluator()
             simulation_data = evaluator.load_data(args.input)
             evaluation_results = evaluator.evaluate(simulation_data)
             evaluator.save(evaluation_results, args.output)
-            print(f"评估已完成，结果保存到 {args.output}")
+            logger.info(f"评估已完成，结果保存到 {args.output}")
 
     except Exception as e:
-        print(f"错误: {e}", file=sys.stderr)
+        logger.error(f"错误: {e}")
         sys.exit(1)
 
 

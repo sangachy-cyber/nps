@@ -16,6 +16,10 @@ from typing import Dict, List
 import base64
 from io import BytesIO
 
+from ..utils.logger import get_logger
+
+
+logger = get_logger(__name__)
 
 class Visualizer:
     """Visualizes network behavior patterns and evaluation results"""
@@ -329,7 +333,7 @@ class Visualizer:
             <div class="container">
                 <h1>网络行为模式发现报告</h1>
                 <h2>聚类方法：{method}</h2>
-                
+
                 <div class="section">
                     <h2>1. 聚类质量评估</h2>
                     <table class="metrics-table">
@@ -350,7 +354,7 @@ class Visualizer:
                         </tr>
                     </table>
                 </div>
-                
+
                 <div class="section">
                     <h2>2. 行为转移质量评估</h2>
                     <table class="metrics-table">
@@ -371,42 +375,42 @@ class Visualizer:
                         </tr>
                     </table>
                 </div>
-                
+
                 <div class="section">
                     <h2>3. 降维可视化</h2>
                     <p>不同降维方法的对比：</p>
                     <p>- PCA：线性降维，保留最大方差</p>
                     <p>- t-SNE：非线性降维，专注于局部结构，适合可视化高维数据</p>
                     <p>- UMAP：非线性降维，同时保留局部和全局结构，运行速度更快</p>
-                    
+
                     <h3>3.1 PCA 散点图</h3>
                     {self.visualize_pca_scatter(X, np.array(results["labels"]), method)}
-                    
+
                     <h3>3.2 PCA 方差解释图</h3>
                     {self.visualize_pca_variance(X, method)}
-                    
+
                     <h3>3.3 t-SNE 散点图</h3>
                     {self.visualize_tsne_scatter(X, np.array(results["labels"]), method)}
-                    
+
                     <h3>3.4 UMAP 散点图</h3>
                     {self.visualize_umap_scatter(X, np.array(results["labels"]), method)}
                 </div>
-                
+
                 <div class="section">
                     <h2>4. 特征分析</h2>
                     <h3>4.1 特征分布直方图</h3>
                     {self.visualize_feature_distribution(X, np.array(results["labels"]), feature_names, method)}
-                    
+
                     <h3>4.2 特征相关性热力图</h3>
                     {self.visualize_correlation_heatmap(X, feature_names, method)}
                 </div>
-                
+
                 <div class="section">
                     <h2>5. 行为转移分析</h2>
                     <h3>5.1 状态转移矩阵热力图</h3>
                     {self.visualize_transition_matrix(np.array(results["transition_matrix"]), method)}
                 </div>
-                
+
                 <div class="section">
                     <h2>6. 行为分离度分析</h2>
                     <h3>6.1 各行为类别特征均值</h3>
@@ -418,7 +422,7 @@ class Visualizer:
                         {self._generate_separation_table(results["separation_metrics"], feature_names)}
                     </table>
                 </div>
-                
+
                 <div class="section">
                     <h2>7. 原始数据样本可视化</h2>
                     <p>以下是每个行为类别的典型样本对应的原始时延和丢包率可视化：</p>
@@ -434,7 +438,7 @@ class Visualizer:
         with open(report_file, "w", encoding="utf-8") as f:
             f.write(html_content)
 
-        print(f"HTML报告已生成：{report_file}")
+        logger.info(f"HTML报告已生成：{report_file}")
 
     def _generate_separation_table(
         self, separation_metrics: Dict, feature_names: List[str]
@@ -487,8 +491,8 @@ class Visualizer:
 
                 for i, sample_idx in enumerate(sample_indices):
                     # Get window start and end indices from features_df
-                    window_start = features_df.iloc[sample_idx]["window_start"]
-                    window_end = features_df.iloc[sample_idx]["window_end"]
+                    window_start = int(features_df.iloc[sample_idx]["window_start"])
+                    window_end = int(features_df.iloc[sample_idx]["window_end"])
 
                     # Extract raw data for this window
                     window_data = raw_data.iloc[window_start:window_end]

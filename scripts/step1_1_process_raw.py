@@ -6,12 +6,18 @@
 import sys
 import os
 
+# 添加src目录到Python路径
 sys.path.append(os.path.abspath("src"))
 
 import pandas as pd
 from pathlib import Path
-from typing import List
 
+# 导入日志模块和配置
+from network_simulation.utils.logger import get_logger
+
+
+# 获取日志记录器
+logger = get_logger(__name__)
 
 def process_raw_data(input_file: Path, output_dir: Path):
     """处理单个原始网络数据文件
@@ -36,7 +42,7 @@ def process_raw_data(input_file: Path, output_dir: Path):
         输出：
             PosixPath('data/processed/20251203_230356_b6x-playback_processed.csv')
     """
-    print(f"正在处理原始数据文件: {input_file}")
+    logger.info(f"正在处理原始数据文件: {input_file}")
 
     # 读取原始文件内容
     try:
@@ -49,8 +55,9 @@ def process_raw_data(input_file: Path, output_dir: Path):
 
     # 跳过前12行元数据和分隔线，只保留数据行
     if len(lines) < 13:
+        logger.error(f"文件格式不正确，缺少足够的元数据行: {input_file}")
         raise ValueError(f"文件格式不正确，缺少足够的元数据行: {input_file}")
-    
+
     data_lines = lines[12:]
 
     # 提取开始时间
@@ -108,10 +115,10 @@ def process_raw_data(input_file: Path, output_dir: Path):
 
     # 创建DataFrame并打印数据统计信息
     df = pd.DataFrame(data)
-    print(f"处理后数据形状: {df.shape}")
-    print(f"时间范围: {df['timestamp'].min()} 到 {df['timestamp'].max()}")
-    print(f"时延范围: {df['delay'].min():.2f} 到 {df['delay'].max():.2f} ms")
-    print(f"丢包率范围: {df['loss_rate'].min():.4f} 到 {df['loss_rate'].max():.4f}")
+    logger.info(f"处理后数据形状: {df.shape}")
+    logger.info(f"时间范围: {df['timestamp'].min()} 到 {df['timestamp'].max()}")
+    logger.info(f"时延范围: {df['delay'].min():.2f} 到 {df['delay'].max():.2f} ms")
+    logger.info(f"丢包率范围: {df['loss_rate'].min():.4f} 到 {df['loss_rate'].max():.4f}")
 
     # 保存处理后的数据到CSV文件
     output_file = output_dir / f"{input_file.stem}_processed.csv"
