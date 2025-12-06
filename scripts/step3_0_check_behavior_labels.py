@@ -5,6 +5,10 @@
 
 import json
 import numpy as np
+from network_simulation.utils.logger import get_logger
+
+# 初始化日志记录器
+logger = get_logger(__name__)
 
 # 读取行为标签文件
 with open(
@@ -16,6 +20,6 @@ with open(
 # 获取标签数组
 labels = np.array(data["labels"])
 
-print("原始行为标签数量:", len(labels))
-print("唯一行为标签:", np.unique(labels))
-print("行为标签分布:", {label: np.sum(labels == label) for label in np.unique(labels)})
+logger.info(f"原始行为标签数量: {len(labels)}")
+logger.info(f"唯一行为标签: {np.unique(labels)}")
+logger.info(f"行为标签分布: { {label: np.sum(labels == label) for label in np.unique(labels)} }")

@@ -52,3 +52,8 @@ index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 extra-index-url = [
     "https://pypi.tuna.tsinghua.edu.cn/simple"
 ]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]

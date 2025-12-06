@@ -16,6 +16,10 @@ from sklearn.metrics import silhouette_score, calinski_harabasz_score
 from hdbscan import HDBSCAN
 from typing import Dict, List, Tuple
 
+from ..utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 # Top-level DTW distance functions to support pickling
 
@@ -39,7 +43,7 @@ def _dtw_distance_tslearn(a, b):
 class PatternIdentifier:
     """使用聚类算法识别网络行为模式"""
 
-    def __init__(self, method: str = "gmm"):
+    def __init__(self, method: str = "gmm", config: dict = None, use_cache: bool = True):
         self.method = method
         self.scaler = StandardScaler()
         self.model = None
@@ -54,6 +58,25 @@ class PatternIdentifier:
             "feat_loss_mode_encoded",
             "feat_loss_pattern_std",
         ]
+        # 加载配置
+        self.config = config or {}
+        # 导入默认配置
+        try:
+            from ...config import (
+                DEFAULT_MIN_CLUSTER_SIZE,
+                DEFAULT_MIN_SAMPLES,
+                DEFAULT_CLUSTER_SELECTION_EPSILON
+            )
+            # 设置默认值
+            self.config.setdefault('min_cluster_size', DEFAULT_MIN_CLUSTER_SIZE)
+            self.config.setdefault('min_samples', DEFAULT_MIN_SAMPLES)
+            self.config.setdefault('cluster_selection_epsilon', DEFAULT_CLUSTER_SELECTION_EPSILON)
+        except ImportError:
+            pass
+        # 缓存配置
+        self.use_cache = use_cache
+        self.cache_dir = Path(".cache")
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def load_features(self, file_path: Path) -> pd.DataFrame:
         """Load extracted features"""
@@ -63,6 +86,36 @@ class PatternIdentifier:
         self, features_df: pd.DataFrame, raw_data_df: pd.DataFrame = None
     ) -> Dict:
         """Discover network behavior patterns and optionally save raw data segments"""
+        import hashlib
+        import pickle
+
+        # Generate cache key based on features and parameters
+        def generate_cache_key():
+            # Create a hash of the features and parameters
+            hash_obj = hashlib.md5()
+            # Hash features data
+            hash_obj.update(features_df.to_csv().encode('utf-8'))
+            # Hash method and config
+            hash_obj.update(self.method.encode('utf-8'))
+            hash_obj.update(str(self.config).encode('utf-8'))
+            return hash_obj.hexdigest()
+
+        cache_key = generate_cache_key()
+        cache_file = self.cache_dir / f"clustering_{cache_key}.pkl"
+
+        # Check if cache exists and use it if enabled
+        if self.use_cache and cache_file.exists():
+            logger.info(f"使用缓存的聚类结果: {cache_file}")
+            with open(cache_file, 'rb') as f:
+                results = pickle.load(f)
+            # Restore scaler
+            self.scaler = results["scaler"]
+            self.model = results.get("model")
+            # Store raw data for later saving if provided
+            if raw_data_df is not None:
+                results["raw_data"] = raw_data_df
+            return results
+
         # Extract feature columns
         X = features_df[self.feature_columns].values
 
@@ -106,11 +159,23 @@ class PatternIdentifier:
             "cluster_stats": cluster_stats,
             "separation_metrics": separation_metrics,
             "scaler": self.scaler,
+            "model": model,
         }
 
         # Store raw data for later saving if provided
         if raw_data_df is not None:
             results["raw_data"] = raw_data_df
+        else:
+            results["raw_data"] = None
+
+        # Save cache if enabled
+        if self.use_cache:
+            # Remove raw data from cache to save space
+            cache_results = results.copy()
+            cache_results.pop("raw_data", None)
+            with open(cache_file, 'wb') as f:
+                pickle.dump(cache_results, f)
+            logger.info(f"保存聚类结果到缓存: {cache_file}")
 
         return results
 
@@ -154,7 +219,7 @@ class PatternIdentifier:
         """Perform HDBSCAN clustering with DTW distance using tslearn"""
         import warnings
 
-        print("Using tslearn DTW for HDBSCAN clustering")
+        logger.info("Using tslearn DTW for HDBSCAN clustering")
 
         # Filter specific FutureWarning about force_all_finite being renamed to ensure_all_finite
         with warnings.catch_warnings():
@@ -163,15 +228,17 @@ class PatternIdentifier:
                 category=FutureWarning,
                 message="'force_all_finite' was renamed to 'ensure_all_finite'",
             )
-            # 调整HDBSCAN参数，生成更多行为类别
+            # 优化HDBSCAN参数，提高性能和聚类质量
             model = HDBSCAN(
-                min_cluster_size=3,  # 进一步减小簇大小阈值，允许更小的簇
-                min_samples=1,  # 进一步减小样本阈值，减少噪声标签
+                min_cluster_size=self.config.get('min_cluster_size', 3),
+                min_samples=self.config.get('min_samples', 1),
                 metric=_dtw_distance_tslearn,
                 cluster_selection_method="eom",
-                cluster_selection_epsilon=0.2,  # 进一步增加epsilon值，允许更多点被分配到簇
-                n_jobs=-1,  # Use all available cores
-                gen_min_span_tree=True,  # 生成最小生成树，帮助可视化和调整
+                cluster_selection_epsilon=self.config.get('cluster_selection_epsilon', 0.2),
+                n_jobs=-1,  # 使用所有可用CPU核心
+                gen_min_span_tree=False,  # 禁用最小生成树生成，提高性能
+                algorithm='best',  # 选择最佳算法（'best'自动选择最快的实现）
+                leaf_size=40,  # 调整叶子大小，提高性能
             )
             labels = model.fit_predict(X)
 

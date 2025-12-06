@@ -7,6 +7,10 @@
 import torch
 import numpy as np
 from typing import Dict, List, Tuple
+from network_simulation.utils.logger import get_logger
+
+# 初始化日志记录器
+logger = get_logger(__name__)
 
 
 class ConstraintInjector:
@@ -15,6 +19,7 @@ class ConstraintInjector:
     def __init__(self, valid_loss_values: List[float]):
         self.valid_loss_values = valid_loss_values
         self.valid_loss_values_np = np.array(valid_loss_values)
+        logger.info(f"初始化ConstraintInjector，合法丢包率值: {valid_loss_values}")
 
     def validate_delay(self, delay: np.ndarray) -> bool:
         """验证延迟的物理合理性
@@ -160,23 +165,32 @@ class ConstraintInjector:
         Returns:
             合法的延迟序列和丢包率序列
         """
+        logger.info(f"开始生成合法序列，最大尝试次数: {max_attempts}")
+
         for attempt in range(max_attempts):
             # 生成序列
             delay, loss_rate = generator_func(*args, **kwargs)
             # 验证序列
             validation = self.validate_sequence(delay, loss_rate)
+
             if validation["all_valid"]:
+                logger.info(f"尝试 {attempt+1}/{max_attempts} 成功生成合法序列")
                 return delay, loss_rate
+
             # 否则进行后处理
+            logger.debug(f"尝试 {attempt+1}/{max_attempts} 生成的序列不合法，进行后处理")
             delay = np.clip(delay, a_min=0, a_max=None)
+
             # 修复丢包率
             for i, lr in enumerate(loss_rate):
                 min_idx = np.argmin(np.abs(self.valid_loss_values_np - lr))
                 loss_rate[i] = self.valid_loss_values_np[min_idx]
+
             # 再次验证
             validation = self.validate_sequence(delay, loss_rate)
             if validation["all_valid"]:
+                logger.info(f"尝试 {attempt+1}/{max_attempts} 后处理成功生成合法序列")
                 return delay, loss_rate
 
-        # 如果多次尝试后仍不合法，返回最后一次的结果
+        logger.warning(f"已达到最大尝试次数 {max_attempts}，返回最后一次生成的序列")
         return delay, loss_rate

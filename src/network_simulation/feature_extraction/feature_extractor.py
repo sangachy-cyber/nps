@@ -10,6 +10,10 @@ from scipy.stats import linregress
 from sklearn.preprocessing import StandardScaler
 from pathlib import Path
 from typing import Dict, List
+from network_simulation.utils.logger import get_logger
+
+# 初始化日志记录器
+logger = get_logger(__name__)
 
 
 class FeatureExtractor:
@@ -23,18 +27,22 @@ class FeatureExtractor:
                 from ...config import DEFAULT_WINDOW_SIZE, DEFAULT_STRIDE
                 self.window_samples = DEFAULT_WINDOW_SIZE  # 从配置文件加载窗口大小
                 self.slide_samples = DEFAULT_STRIDE  # 从配置文件加载滑动步长
+                logger.info(f"从配置文件加载参数: window_size={self.window_samples}, stride={self.slide_samples}")
             except ImportError:
                 # 导入失败时使用默认值
                 self.window_samples = 100  # 默认窗口大小
                 self.slide_samples = 50  # 默认滑动步长
+                logger.warning("配置文件导入失败，使用默认参数")
         else:
             self.window_samples = config.get('window_size', 100)  # 从配置字典加载
             self.slide_samples = config.get('stride', 50)
-        
+            logger.info(f"从配置字典加载参数: window_size={self.window_samples}, stride={self.slide_samples}")
+
         self.time_granularity = 0.1  # 100ms
         self.window_size = self.window_samples * self.time_granularity  # 计算窗口大小（秒）
         self.slide_step = self.slide_samples * self.time_granularity  # 计算滑动步长（秒）
-        
+        logger.info(f"特征提取器初始化完成，窗口大小: {self.window_size}秒, 滑动步长: {self.slide_step}秒")
+
         # 合法丢包值集合和映射表，将在运行时自动提取
         self.valid_loss_values = []
         self.loss_mode_mapping = {}
@@ -45,16 +53,22 @@ class FeatureExtractor:
 
     def extract(self, df: pd.DataFrame) -> pd.DataFrame:
         """Extract features from processed network data"""
+        logger.info(f"开始提取特征，数据行数: {len(df)}")
+
         # Extract valid loss values first
         self.valid_loss_values = self._extract_valid_loss_values(df)
+        logger.info(f"提取到合法丢包值: {self.valid_loss_values}")
+
         # Build loss mode mapping from valid loss values
         self._build_loss_mode_mapping()
+        logger.debug(f"构建丢包模式映射: {self.loss_mode_mapping}")
 
         features_list = []
 
         # Calculate number of windows
         total_samples = len(df)
         num_windows = (total_samples - self.window_samples) // self.slide_samples + 1
+        logger.info(f"将数据划分为 {num_windows} 个窗口，窗口大小: {self.window_samples} 采样点, 滑动步长: {self.slide_samples} 采样点")
 
         for i in range(num_windows):
             start_idx = i * self.slide_samples
@@ -67,8 +81,12 @@ class FeatureExtractor:
             features = self._extract_window_features(df, window, start_idx, end_idx)
             features_list.append(features)
 
+            if (i + 1) % 100 == 0 or i + 1 == num_windows:
+                logger.info(f"已处理 {i + 1}/{num_windows} 个窗口")
+
         # Create features dataframe
         features_df = pd.DataFrame(features_list)
+        logger.info(f"特征提取完成，共提取 {len(features_df)} 条特征记录")
 
         return features_df
 
@@ -111,6 +129,8 @@ class FeatureExtractor:
         - delay-related features: StandardScaler
         - loss-related features: RobustScaler
         """
+        logger.info(f"开始归一化特征，特征行数: {len(features_df)}")
+
         # Create a copy to avoid modifying the original
         normalized_features = features_df.copy()
 
@@ -120,6 +140,7 @@ class FeatureExtractor:
             "feat_delay_trend",
             "feat_delay_acf_5",
         ]
+        logger.debug(f"延迟相关特征: {delay_features}")
 
         loss_features = [
             "feat_loss_nonzero_ratio",
@@ -129,6 +150,7 @@ class FeatureExtractor:
             "feat_loss_mode_encoded",
             "feat_loss_pattern_std",
         ]
+        logger.debug(f"丢包相关特征: {loss_features}")
 
         # Check if all feature columns exist
         all_features = delay_features + loss_features
@@ -136,6 +158,7 @@ class FeatureExtractor:
             col for col in all_features if col not in normalized_features.columns
         ]
         if missing_columns:
+            logger.error(f"缺少特征列: {missing_columns}")
             raise ValueError(f"Missing feature columns: {missing_columns}")
 
         # Initialize scalers
@@ -148,11 +171,14 @@ class FeatureExtractor:
         normalized_features[delay_features] = delay_scaler.fit_transform(
             normalized_features[delay_features]
         )
+        logger.debug("延迟相关特征已使用StandardScaler归一化")
 
         normalized_features[loss_features] = loss_scaler.fit_transform(
             normalized_features[loss_features]
         )
+        logger.debug("丢包相关特征已使用RobustScaler归一化")
 
+        logger.info("特征归一化完成")
         return normalized_features
 
     def _extract_window_features(
@@ -302,5 +328,7 @@ class FeatureExtractor:
 
     def save(self, features: pd.DataFrame, output_path: Path) -> None:
         """Save extracted features to file"""
+        logger.info(f"开始保存特征到文件: {output_path}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         features.to_csv(output_path, index=False)
+        logger.info(f"特征保存完成，保存行数: {len(features)}")

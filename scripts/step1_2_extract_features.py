@@ -11,7 +11,11 @@ sys.path.append(os.path.abspath("src"))
 import pandas as pd
 from pathlib import Path
 from network_simulation.feature_extraction.feature_extractor import FeatureExtractor
+from network_simulation.utils.logger import get_logger
 
+
+# 获取日志记录器
+logger = get_logger(__name__)
 
 def extract_features(input_file: Path, output_dir: Path):
     """从处理后的数据中提取网络特征
@@ -37,7 +41,7 @@ def extract_features(input_file: Path, output_dir: Path):
             (PosixPath('data/results/features/20251203_230356_b6x-playback_processed_features.csv'),
              PosixPath('data/results/features/valid_loss_values.json'))
     """
-    print(f"正在从 {input_file} 提取特征")
+    logger.info(f"正在从 {input_file} 提取特征")
 
     # 加载处理后的数据
     df = pd.read_csv(input_file, parse_dates=["timestamp"])
@@ -57,17 +61,17 @@ def extract_features(input_file: Path, output_dir: Path):
     slide_samples = feature_extractor.slide_samples
     num_windows = (total_samples - window_samples) // slide_samples + 1
 
-    print(f"  文件: {input_file.name}")
-    print(f"  总样本数: {total_samples}")
-    print(f"  窗口样本数: {window_samples}")
-    print(f"  滑动步长: {slide_samples}")
-    print(f"  窗口数量: {num_windows}")
-    print(f"  特征数据形状: {features_df.shape}")
-    print(f"  期望窗口数: {num_windows}")
+    logger.info(f"  文件: {input_file.name}")
+    logger.info(f"  总样本数: {total_samples}")
+    logger.info(f"  窗口样本数: {window_samples}")
+    logger.info(f"  滑动步长: {slide_samples}")
+    logger.info(f"  窗口数量: {num_windows}")
+    logger.info(f"  特征数据形状: {features_df.shape}")
+    logger.info(f"  期望窗口数: {num_windows}")
 
     # 验证滑动窗口数量是否匹配
     if len(features_df) != num_windows:
-        print(f"  警告: 期望 {num_windows} 个窗口，但实际得到 {len(features_df)} 个")
+        logger.warning(f"  警告: 期望 {num_windows} 个窗口，但实际得到 {len(features_df)} 个")
 
     # 保存特征数据
     features_output_file = output_dir / f"{input_file.stem}_features.csv"
@@ -80,9 +84,9 @@ def extract_features(input_file: Path, output_dir: Path):
     with open(valid_loss_values_output, "w") as f:
         json.dump(feature_extractor.valid_loss_values, f, indent=2)
 
-    print(f"特征数据已保存到: {features_output_file}")
-    print(f"合法丢包值已保存到: {valid_loss_values_output}")
-    print(f"合法丢包值: {feature_extractor.valid_loss_values}")
+    logger.info(f"特征数据已保存到: {features_output_file}")
+    logger.info(f"合法丢包值已保存到: {valid_loss_values_output}")
+    logger.info(f"合法丢包值: {feature_extractor.valid_loss_values}")
 
     return features_output_file, valid_loss_values_output
 
@@ -100,10 +104,10 @@ def main():
         output_features_dir: 特征数据的输出目录路径
     """
     if len(sys.argv) < 3:
-        print(
-            "用法: python scripts/step1_2_extract_features.py <input_processed_file_or_dir> <output_features_dir>"
-        )
-        sys.exit(1)
+        logger.error(
+        "用法: python scripts/step1_2_extract_features.py <input_processed_file_or_dir> <output_features_dir>"
+    )
+    sys.exit(1)
 
     input_path = Path(sys.argv[1])
     output_dir = Path(sys.argv[2])
@@ -128,55 +132,55 @@ def main():
         # 如果输入是文件夹，处理所有.csv文件
         processed_files = list(input_path.glob("*.csv"))
         if not processed_files:
-            print(f"警告: 在 {input_path} 中未找到 .csv 文件")
-            sys.exit(1)
+            logger.warning(f"在 {input_path} 中未找到 .csv 文件")
+        sys.exit(1)
 
         # 首先合并所有处理后的文件
         all_processed_df = []
         for processed_file in processed_files:
             df = pd.read_csv(processed_file, parse_dates=["timestamp"])
             all_processed_df.append(df)
-        
+
         # 合并为一个DataFrame
         merged_processed_df = pd.concat(all_processed_df, ignore_index=True)
-        print(
+        logger.info(
             f"合并了 {len(processed_files)} 个处理后的文件，总样本数: {len(merged_processed_df)}"
         )
-        
+
         # 保存合并后的文件
         merged_processed_file = output_dir / "merged_processed_data_temp.csv"
         merged_processed_df.to_csv(merged_processed_file, index=False)
-        
+
         # 对合并后的文件提取特征
-        print(f"\n正在对合并后的文件提取特征...")
+        logger.info("\n正在对合并后的文件提取特征...")
         features_file, valid_loss_file = extract_features(merged_processed_file, output_dir)
-        
+
         # 收集特征文件
         all_features_dfs.append(pd.read_csv(features_file))
         with open(valid_loss_file, "r") as f:
             import json
             final_valid_loss_values = json.load(f)
-        
+
         # 删除临时文件
         merged_processed_file.unlink()
-        
+
         # 保存合并后的特征文件（重命名）
         merged_features_file = output_dir / "merged_features.csv"
         import shutil
         shutil.copy2(features_file, merged_features_file)
-        
+
         # 保存合并后的合法丢包值
         merged_valid_loss_file = output_dir / "merged_valid_loss_values.json"
         with open(merged_valid_loss_file, "w") as f:
             json.dump(final_valid_loss_values, f, indent=2)
-        
-        print(f"\n已将合并数据的特征保存到 {merged_features_file}")
-        print(f"合并后的合法丢包值: {final_valid_loss_values}")
+
+        logger.info(f"\n已将合并数据的特征保存到 {merged_features_file}")
+        logger.info(f"合并后的合法丢包值: {final_valid_loss_values}")
     else:
-        print(f"错误: 输入 {input_path} 不是文件或目录")
+        logger.error(f"输入 {input_path} 不是文件或目录")
         sys.exit(1)
 
-    print("步骤1.2：提取特征完成！")
+    logger.info("步骤1.2：提取特征完成！")
 
 
 if __name__ == "__main__":

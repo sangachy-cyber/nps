@@ -16,15 +16,29 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from network_simulation.feature_extraction.feature_extractor import FeatureExtractor
-from network_simulation.pattern_discovery.pattern_identifier import PatternIdentifier
 from network_simulation.condition_generation.diffusion_model import (
     ConditionDiffusionModel,
 )
 from network_simulation.condition_generation.constraint_injector import (
     ConstraintInjector,
 )
+from network_simulation.utils.logger import get_logger
+from config import (
+    DEFAULT_WINDOW_SIZE,
+    DEFAULT_STRIDE,
+    PROCESSED_DIR,
+    PATTERNS_DIR,
+    DEFAULT_MODEL_DIR,
+    GENERATED_DIR,
+    DEFAULT_SAMPLE_LENGTH,
+    DEFAULT_NUM_GROUPS,
+    CLEANUP_OLD_FILES,
+    KEEP_LATEST_FILES
+)
 
+
+# 获取日志记录器
+logger = get_logger(__name__)
 
 def generate_samples(
     input_processed_file: Path,
@@ -65,7 +79,7 @@ def generate_samples(
         - behavior_labels.json：包含labels数组，每个元素为行为ID
         - valid_loss_values.json：包含合法丢包值数组
     """
-    print(f"正在使用模型生成样本: {input_model_path}")
+    logger.info(f"正在使用模型生成样本: {input_model_path}")
 
     # 设备设置：优先使用MacBook MPS GPU，然后是CUDA，最后是CPU
     device = torch.device(
@@ -75,10 +89,21 @@ def generate_samples(
         if torch.cuda.is_available()
         else "cpu"
     )
-    print(f"使用设备: {device}")
+    logger.info(f"使用设备: {device}")
 
     # 加载合法丢包值：从JSON文件中读取允许的丢包率范围
+    # 尝试从多个位置加载valid_loss_values.json文件
     valid_loss_values_file = input_patterns_dir / "metadata" / "valid_loss_values.json"
+    if not valid_loss_values_file.exists():
+        # 尝试从features目录加载（优化流水线的情况）
+        features_dir = input_patterns_dir.parent / "features"
+        valid_loss_values_file = features_dir / "valid_loss_values.json"
+        if not valid_loss_values_file.exists():
+            # 尝试从features目录加载合并后的合法丢包值（原始流水线的情况）
+            valid_loss_values_file = features_dir / "merged_valid_loss_values.json"
+            if not valid_loss_values_file.exists():
+                raise FileNotFoundError(f"在 {input_patterns_dir} 及其父目录中未找到 valid_loss_values.json 文件")
+    
     with open(valid_loss_values_file, "r") as f:
         valid_loss_values = json.load(f)
 
@@ -94,9 +119,8 @@ def generate_samples(
         behavior_labels_data = json.load(f)
     behavior_ids = np.array(behavior_labels_data["labels"])
 
-    # 导入配置
-    from config import DEFAULT_WINDOW_SIZE, DEFAULT_STRIDE
-    
+    # 已从network_simulation.config导入配置，无需重复导入
+
     # 扩展行为标签到样本级别（使用10秒窗口，50%重叠，与预处理一致）
     window_size = DEFAULT_WINDOW_SIZE  # 10秒窗口，每个时间点100ms
     stride = DEFAULT_STRIDE  # 50%重叠
@@ -167,7 +191,7 @@ def generate_samples(
 
         # 找出所有噪声标签的位置
         noise_indices = np.where(expanded_behavior_ids == -1)[0]
-        print(f"找到 {len(noise_indices)} 个噪声标签，使用DTW距离最近的标签替换")
+        logger.info(f"找到 {len(noise_indices)} 个噪声标签，使用DTW距离最近的标签替换")
 
         # 为每个噪声标签找到最近的非噪声标签
         for i in noise_indices:
@@ -197,10 +221,10 @@ def generate_samples(
             # 替换噪声标签为最近的非噪声标签
             processed_behavior_ids[i] = closest_label
 
-        print("噪声标签替换完成")
+        logger.info("噪声标签替换完成")
     else:
         # 如果没有非噪声标签，使用默认标签0
-        print("警告：所有行为标签都是噪声标签，使用默认标签0")
+        logger.warning("所有行为标签都是噪声标签，使用默认标签0")
         processed_behavior_ids = np.zeros_like(expanded_behavior_ids)
 
     # 保存处理后的行为标签和对应的处理后数据
@@ -208,13 +232,13 @@ def generate_samples(
     valid_processed_df = processed_df.copy()
 
     # 批量样本选择：找到多组真实连续序列，每组对应不同的主要行为类别
-    sample_length = 6000  # 样本长度必须是6000
-    num_groups = 2  # 生成2组样本，覆盖不同行为类别
+    sample_length = DEFAULT_SAMPLE_LENGTH  # 从配置文件加载样本长度
+    num_groups = DEFAULT_NUM_GROUPS  # 从配置文件加载生成组数
     selected_groups = []  # 保存选中的样本组信息
 
     # 确保valid_processed_df有足够的样本
     if len(valid_processed_df) < sample_length:
-        print(f"警告: 有效样本数不足 {sample_length}，无法生成样本")
+        logger.warning(f"有效样本数不足 {sample_length}，无法生成样本")
         return None, None
 
     # 统计所有行为类别的分布
@@ -222,11 +246,11 @@ def generate_samples(
         valid_expanded_behavior_ids, return_counts=True
     )
     behavior_distribution = dict(zip(unique_behaviors, behavior_counts))
-    print(f"行为类别分布: {behavior_distribution}")
-    print(f"参考样本涉及的行为类别: {sorted(unique_behaviors.tolist())}")
+    logger.info(f"行为类别分布: {behavior_distribution}")
+    logger.info(f"参考样本涉及的行为类别: {sorted(unique_behaviors.tolist())}")
 
     # 1. 找到每组对应不同主要行为类别的连续序列
-    print(f"寻找 {num_groups} 组真实连续序列，每组对应不同的主要行为类别...")
+    logger.info(f"寻找 {num_groups} 组真实连续序列，每组对应不同的主要行为类别...")
 
     # 遍历所有可能的起始索引，找到多组样本
     start_indices = []
@@ -235,11 +259,11 @@ def generate_samples(
     # 使用更高效的方式寻找样本组
     # 只检查每个样本组的前100个行为ID，而不是全部6000个
     check_length = 100
-    
+
     # 首先寻找包含多个类别的样本组
-    print("首先寻找包含多个类别的样本组...")
+    logger.info("首先寻找包含多个类别的样本组...")
     mixed_samples_found = []
-    
+
     # 遍历所有可能的起始索引，寻找混合类别样本组
     for idx in range(0, len(valid_processed_df) - sample_length + 1, sample_length // 2):  # 步长减半，增加找到的概率
         # 检查更长的序列，提高多类别检测的准确性
@@ -248,7 +272,7 @@ def generate_samples(
             current_sequence = valid_expanded_behavior_ids[idx : idx + check_longer_length]
         else:
             current_sequence = valid_expanded_behavior_ids[idx : idx + check_length]
-        
+
         # 统计当前序列的主要行为类别（出现次数最多的行为类别）
         unique_current, counts_current = np.unique(current_sequence, return_counts=True)
         main_behavior = unique_current[np.argmax(counts_current)]
@@ -263,50 +287,50 @@ def generate_samples(
                 'main_behavior_ratio': main_behavior_ratio,
                 'unique_current': unique_current
             })
-    
+
     # 按照包含的类别数量排序，优先选择包含更多类别的样本组
     mixed_samples_found.sort(key=lambda x: x['unique_count'], reverse=True)
-    
+
     # 选择前num_groups个样本组
     for sample in mixed_samples_found:
         if len(start_indices) >= num_groups:
             break
-        
+
         # 避免重复的主要行为类别
         if sample['main_behavior'] not in [t for t in group_behavior_types if not t.startswith('mixed_')]:
             start_indices.append(sample['idx'])
             group_behavior_types.append(f"mixed_{sample['main_behavior']}")
-            print(
+            logger.info(
                 f"找到多样化样本组 - 起始索引: {sample['idx']}, 包含 {sample['unique_count']} 个类别, 主要行为: {sample['main_behavior']}, 比例: {sample['main_behavior_ratio']:.2f}"
             )
-    
+
     # 如果找不到足够的混合类别样本组，使用原来的逻辑寻找样本组
     if len(start_indices) < num_groups:
-        print(f"只找到 {len(start_indices)} 个混合类别样本组，使用原始逻辑寻找剩余样本组...")
-        
+        logger.info(f"只找到 {len(start_indices)} 个混合类别样本组，使用原始逻辑寻找剩余样本组...")
+
         # 遍历所有可能的起始索引，步长为sample_length，避免重叠
         for idx in range(0, len(valid_processed_df) - sample_length + 1, sample_length):
             if len(start_indices) >= num_groups:
                 break
-                
+
             # 只检查前100个行为ID，加速寻找过程
             current_sequence = valid_expanded_behavior_ids[idx : idx + check_length]
             # 统计当前序列的主要行为类别（出现次数最多的行为类别）
             unique_current, counts_current = np.unique(current_sequence, return_counts=True)
             main_behavior = unique_current[np.argmax(counts_current)]
             main_behavior_ratio = np.max(counts_current) / check_length
-            
+
             # 检查该起始索引是否已经被选中
             if idx not in start_indices and main_behavior not in [t for t in group_behavior_types if not t.startswith('mixed_')]:
                 start_indices.append(idx)
                 group_behavior_types.append(main_behavior)
-                print(
-                    f"找到样本组 - 起始索引: {idx}, 主要行为类别: {main_behavior}, 比例: {main_behavior_ratio:.2f}"
-                )
+                logger.info(
+                f"找到样本组 - 起始索引: {idx}, 主要行为类别: {main_behavior}, 比例: {main_behavior_ratio:.2f}"
+            )
 
     # 如果找到的样本组不足，使用额外的策略
     if len(start_indices) < num_groups:
-        print(f"只找到 {len(start_indices)} 组样本，使用额外策略寻找剩余样本组...")
+        logger.info(f"只找到 {len(start_indices)} 组样本，使用额外策略寻找剩余样本组...")
 
         # 遍历所有可能的起始索引，找到不同的序列
         for idx in range(
@@ -327,7 +351,7 @@ def generate_samples(
             # 添加到列表中
             start_indices.append(idx)
             group_behavior_types.append(main_behavior)
-            print(f"找到额外样本组 - 起始索引: {idx}, 主要行为类别: {main_behavior}")
+            logger.info(f"找到额外样本组 - 起始索引: {idx}, 主要行为类别: {main_behavior}")
 
             # 如果已经找到了足够的样本组，停止寻找
             if len(start_indices) >= num_groups:
@@ -335,7 +359,7 @@ def generate_samples(
 
     # 如果仍然找不到足够的样本组，使用随机选择
     if len(start_indices) < num_groups:
-        print(f"仍然只找到 {len(start_indices)} 组样本，使用随机选择补充...")
+        logger.info(f"仍然只找到 {len(start_indices)} 组样本，使用随机选择补充...")
         import random
 
         # 只尝试10次随机选择，避免无限循环
@@ -349,7 +373,7 @@ def generate_samples(
             # 添加到列表中
             start_indices.append(random_idx)
             group_behavior_types.append(1)  # 默认行为类别
-            print(f"随机选择样本组 - 起始索引: {random_idx}, 主要行为类别: 1")
+            logger.info(f"随机选择样本组 - 起始索引: {random_idx}, 主要行为类别: 1")
 
             attempts += 1
 
@@ -358,7 +382,7 @@ def generate_samples(
     generated_files = []
 
     # 只加载一次模型，避免重复加载
-    print(f"正在加载模型: {input_model_path}")
+    logger.info(f"正在加载模型: {input_model_path}")
     checkpoint = torch.load(input_model_path, map_location=device, weights_only=False)
     behavior_mapping = checkpoint["behavior_mapping"]
     num_behaviors = len(behavior_mapping)
@@ -382,36 +406,36 @@ def generate_samples(
     # 将numpy字符串数组转换为Python字符串
     if isinstance(normalization_method, np.ndarray):
         normalization_method = normalization_method.item()
-    
+
     # 检查是否使用对数变换
     use_log_transform = checkpoint.get('use_log_transform', False)
     # 将numpy布尔值转换为Python布尔值
     if isinstance(use_log_transform, np.ndarray):
         use_log_transform = use_log_transform.item()
-    
+
     # 打印反归一化参数，用于调试
-    print(f"\n反归一化参数：")
-    print(f"归一化方法: {normalization_method}")
-    print(f"是否使用对数变换: {use_log_transform}")
-    
+    logger.info("\n反归一化参数：")
+    logger.info(f"归一化方法: {normalization_method}")
+    logger.info(f"是否使用对数变换: {use_log_transform}")
+
     # 根据归一化方法加载不同的参数
     delay_norm_params = {
         'normalization_method': normalization_method,
         'use_log_transform': use_log_transform  # 从检查点读取对数变换参数
     }
-    
+
     if normalization_method == 'robust':
         # 加载robust归一化参数
         delay_scaler_center_ = checkpoint["delay_scaler_center_"]  # 注意：这里存储的是center_而不是mean_
         delay_scaler_scale_ = checkpoint["delay_scaler_scale_"]
         current_min = checkpoint.get("robust_scale_min", -1.0)  # 对应预处理中的current_min
         current_max = checkpoint.get("robust_scale_max", 1.0)  # 对应预处理中的current_max
-        
-        print(f"delay_scaler_center_: {delay_scaler_center_}")
-        print(f"delay_scaler_scale_: {delay_scaler_scale_}")
-        print(f"current_min: {current_min}")
-        print(f"current_max: {current_max}")
-        
+
+        logger.info(f"delay_scaler_center_: {delay_scaler_center_}")
+        logger.info(f"delay_scaler_scale_: {delay_scaler_scale_}")
+        logger.info(f"current_min: {current_min}")
+        logger.info(f"current_max: {current_max}")
+
         # 添加robust归一化参数
         delay_norm_params.update({
             'delay_scaler_center_': delay_scaler_center_,
@@ -423,9 +447,9 @@ def generate_samples(
         # 加载分位数归一化参数
         quantile_sorted_data = checkpoint["quantile_sorted_data"]
         quantile_quantiles = checkpoint["quantile_quantiles"]
-        
-        print(f"分位数参数 - 数据点数: {len(quantile_sorted_data)}")
-        
+
+        logger.info(f"分位数参数 - 数据点数: {len(quantile_sorted_data)}")
+
         # 添加分位数归一化参数
         delay_norm_params.update({
             'quantile_params': {
@@ -433,15 +457,15 @@ def generate_samples(
                 'quantiles': quantile_quantiles
             }
         })
-    
+
     # 构建丢包率归一化参数字典
     loss_norm_params = {
         'valid_loss_values': valid_loss_values
     }
 
     for i, start_idx in enumerate(start_indices):
-        print(f"\n处理样本组 {i + 1}/{len(start_indices)}...")
-        print(f"起始索引: {start_idx}, 主要行为类别: {group_behavior_types[i]}")
+        logger.info(f"\n处理样本组 {i + 1}/{len(start_indices)}...")
+        logger.info(f"起始索引: {start_idx}, 主要行为类别: {group_behavior_types[i]}")
 
         # 选择当前组的样本
         selected_df = valid_processed_df.iloc[
@@ -455,7 +479,7 @@ def generate_samples(
         model_behavior_ids = []
         # 获取模型训练时的所有原始行为ID
         model_behavior_keys = list(behavior_mapping.keys())
-        
+
         for behavior_id in selected_behavior_ids:
             if behavior_id in behavior_mapping:
                 model_behavior_ids.append(behavior_mapping[behavior_id])
@@ -463,13 +487,13 @@ def generate_samples(
                 # 对于不在映射中的行为ID，将其映射到数值最接近的行为ID
                 closest_behavior = min(model_behavior_keys, key=lambda x: abs(x - behavior_id))
                 model_behavior_ids.append(behavior_mapping[closest_behavior])
-                print(
-                    f"警告: 行为ID {behavior_id} 不在模型映射中，已转换为最接近的行为ID {closest_behavior}"
+                logger.warning(
+                    f"行为ID {behavior_id} 不在模型映射中，已转换为最接近的行为ID {closest_behavior}"
                 )
 
         # 确保样本长度符合要求
         if len(selected_behavior_ids) < sample_length:
-            print(f"警告: 样本组 {i + 1} 样本不足 {sample_length}，跳过")
+            logger.warning(f"样本组 {i + 1} 样本不足 {sample_length}，跳过")
             continue
 
         # 转换行为ID为张量，使用转换后的model_behavior_ids
@@ -478,7 +502,7 @@ def generate_samples(
         )
 
         # 生成样本
-        print("正在生成网络状态数据...")
+        logger.info("正在生成网络状态数据...")
         with torch.no_grad():
             generated = model.sample(behavior_ids_tensor, device)
 
@@ -487,29 +511,29 @@ def generate_samples(
 
         # 导入归一化模块
         from network_simulation.condition_generation.normalization import denormalize_delay, denormalize_loss_rate
-        
+
         # 反归一化延迟 - 使用统一的反归一化函数
         delay_norm = generated[:, 0]
         delay = denormalize_delay(delay_norm, delay_norm_params)
-        
+
         # 添加适当的约束，确保生成数据的范围与原始数据一致
         # 使用原始数据的统计特性来约束生成的延迟值
         original_min = selected_df['delay'].min()
         original_max = selected_df['delay'].max()
         original_mean = selected_df['delay'].mean()
         original_std = selected_df['delay'].std()
-        
+
         # 打印原始数据的统计特性，用于调试
-        print(f"原始数据统计 - 最小值: {original_min:.4f}, 最大值: {original_max:.4f}, 平均值: {original_mean:.4f}, 标准差: {original_std:.4f}")
-        
+        logger.info(f"原始数据统计 - 最小值: {original_min:.4f}, 最大值: {original_max:.4f}, 平均值: {original_mean:.4f}, 标准差: {original_std:.4f}")
+
         # 调整约束逻辑：使用原始数据的3倍标准差作为约束范围，减少极端值的生成
         # 同时保留原始数据的最大值作为绝对上限
         # 但使用更智能的方式处理，避免大量值被截断到最大值
         constraint_upper = min(original_max, original_mean + 3 * original_std)
-        
+
         # 打印约束上限，用于调试
-        print(f"约束上限: {constraint_upper:.4f}")
-        
+        logger.info(f"约束上限: {constraint_upper:.4f}")
+
         # 1. 首先对原始范围外的值进行软约束
         # 对于超过约束上限但未超过原始最大值的值，进行渐进式压缩
         # 这样可以减少大量值被截断到最大值的情况
@@ -525,10 +549,10 @@ def generate_samples(
                 # 应用压缩，将超出部分压缩到[constraint_upper, original_max]范围内
                 compressed_values = constraint_upper + excess * compression_factor
                 delay[mask] = compressed_values
-        
+
         # 2. 最后限制生成的延迟在合理范围内（0到原始最大值）
         delay = np.clip(delay, a_min=0, a_max=original_max)
-        
+
         # 3. 对生成的延迟值添加额外的平滑处理，减少极端值的影响
         # 使用简单的中值滤波去除孤立的极端值
         from scipy.signal import medfilt
@@ -540,27 +564,27 @@ def generate_samples(
             delay_smoothed = medfilt(delay, kernel_size=5)
             # 只替换接近最大值的值
             delay[mask] = delay_smoothed[mask]
-        
+
         # 打印裁剪后的延迟统计，用于调试
-        print(f"裁剪后延迟统计 - 最小值: {delay.min():.4f}, 最大值: {delay.max():.4f}, 平均值: {delay.mean():.4f}, 标准差: {delay.std():.4f}")
+        logger.info(f"裁剪后延迟统计 - 最小值: {delay.min():.4f}, 最大值: {delay.max():.4f}, 平均值: {delay.mean():.4f}, 标准差: {delay.std():.4f}")
 
         # 反归一化丢包率 - 使用统一的反归一化函数
         loss_norm = generated[:, 1]
         loss_rate = denormalize_loss_rate(loss_norm, loss_norm_params)
-        
+
         # 添加额外处理，确保生成的丢包率分布更接近原始数据
         # 1. 计算原始数据中丢包率为0的比例
         original_zero_loss_rate = (selected_df['loss_rate'] == 0).sum() / len(selected_df)
-        
+
         # 2. 如果原始数据中大多数丢包率为0，调整生成的丢包率分布
         if original_zero_loss_rate > 0.8:  # 如果原始数据中80%以上的丢包率为0
             # 计算需要调整为0的丢包率数量
             target_zero_count = int(len(loss_rate) * original_zero_loss_rate)
-            
+
             # 随机选择一些位置将丢包率设置为0
             zero_indices = np.random.choice(
-                len(loss_rate), 
-                size=target_zero_count, 
+                len(loss_rate),
+                size=target_zero_count,
                 replace=False
             )
             loss_rate[zero_indices] = 0.0
@@ -574,7 +598,7 @@ def generate_samples(
         delay = generated_df["delay"].values
         loss_rate = generated_df["loss_rate"].values
         validation = constraint_injector.validate_sequence(delay, loss_rate)
-        print(f"生成数据验证结果: {validation}")
+        logger.info(f"生成数据验证结果: {validation}")
 
         # 临时注释掉后处理部分，专注模型本身的提升
         # 按照 project_rules 建议，先不考虑后处理，专注模型本身的提升
@@ -582,14 +606,14 @@ def generate_samples(
         #     print("生成数据不符合约束条件，正在进行后处理修复...")
         #     # 修复延迟：确保非负
         #     generated_df["delay"] = np.clip(delay, a_min=0, a_max=None)
-        # 
+        #
         #     # 修复丢包率：映射到合法值
         #     loss_rate_fixed = []
         #     for lr in loss_rate:
         #         min_idx = np.argmin(np.abs(np.array(valid_loss_values) - lr))
         #         loss_rate_fixed.append(valid_loss_values[min_idx])
         #     generated_df["loss_rate"] = loss_rate_fixed
-        # 
+        #
         #     # 再次验证修复后的数据
         #     delay_fixed = generated_df["delay"].values
         #     loss_rate_fixed = generated_df["loss_rate"].values
@@ -614,9 +638,9 @@ def generate_samples(
         original_files.append(original_file)
         generated_files.append(generated_file)
 
-        print(f"样本组 {i + 1} 已保存")
-        print(f"原始数据: {original_file}")
-        print(f"生成数据: {generated_file}")
+        logger.info(f"样本组 {i + 1} 已保存")
+        logger.info(f"原始数据: {original_file}")
+        logger.info(f"生成数据: {generated_file}")
 
     return original_files, generated_files
 
@@ -628,7 +652,6 @@ def cleanup_old_files(directory, pattern):
         directory: 要清理的目录
         pattern: 要清理的文件模式
     """
-    from config import CLEANUP_OLD_FILES, KEEP_LATEST_FILES
 
     if not CLEANUP_OLD_FILES:
         return
@@ -643,7 +666,7 @@ def cleanup_old_files(directory, pattern):
     # 删除旧文件
     for file in files[KEEP_LATEST_FILES:]:
         file.unlink()
-        print(f"已清理旧文件: {file}")
+        logger.info(f"已清理旧文件: {file}")
 
 
 def main():
@@ -661,7 +684,6 @@ def main():
         output_generation_dir: 生成样本的输出目录路径 (默认: data/generated)
     """
     import argparse
-    from config import PROCESSED_DIR, PATTERNS_DIR, DEFAULT_MODEL_DIR, GENERATED_DIR
 
     # 添加命令行参数解析
     parser = argparse.ArgumentParser(description="生成网络状态样本数据")
@@ -711,7 +733,7 @@ def main():
     # 查找模型文件
     model_path = input_model_dir / "diffusion_model_final.pth"
     if not model_path.exists():
-        print(f"错误: 模型文件 {model_path} 不存在")
+        logger.error(f"模型文件 {model_path} 不存在")
         sys.exit(1)
 
     # 生成样本
@@ -724,13 +746,13 @@ def main():
         # 如果输入是一个文件夹，选择第一个处理后的文件
         processed_files = list(input_processed_path.glob("*.csv"))
         if not processed_files:
-            print(f"警告: 在 {input_processed_path} 中未找到 .csv 文件")
-            sys.exit(1)
+            logger.warning(f"在 {input_processed_path} 中未找到 .csv 文件")
+        sys.exit(1)
 
         # 使用第一个处理后的文件
         selected_processed_file = processed_files[0]
 
-        print(f"\n正在使用 {selected_processed_file} 生成样本...")
+        logger.info(f"\n正在使用 {selected_processed_file} 生成样本...")
         # 生成样本，使用单个文件
         generate_samples(
             selected_processed_file,
@@ -742,7 +764,7 @@ def main():
         print(f"错误: 输入 {input_processed_path} 不是文件或目录")
         sys.exit(1)
 
-    print("步骤2.2：生成样本数据完成！")
+    logger.info("步骤2.2：生成样本数据完成！")
 
 
 if __name__ == "__main__":
