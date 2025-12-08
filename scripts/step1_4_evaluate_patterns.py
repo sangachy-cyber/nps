@@ -40,24 +40,36 @@ def load_behavior_data(patterns_dir: Path):
     Returns:
         tuple: (行为标签数据, 转移矩阵数据)
     """
-    # 加载行为标签
-    labels_file = patterns_dir / "behavior_labels_hdbscan.json"
-    if not labels_file.exists():
-        logger.error(f"未找到行为标签文件: {labels_file}")
+    # 动态检测可用的行为标签文件
+    available_files = list(patterns_dir.glob("behavior_labels_*.json"))
+    if not available_files:
+        logger.error(f"在 {patterns_dir} 中未找到任何行为标签文件")
         sys.exit(1)
-    
+
+    # 优先使用rule方法的文件，如果不存在则使用第一个找到的文件
+    labels_file = None
+    for file in available_files:
+        if "rule" in file.name:
+            labels_file = file
+            break
+    if not labels_file:
+        labels_file = available_files[0]
+
+    logger.info(f"使用行为标签文件: {labels_file}")
     with open(labels_file, "r") as f:
         labels_data = json.load(f)
-    
-    # 加载转移矩阵
-    transition_file = patterns_dir / "behavior_transition_graph_hdbscan.json"
+
+    # 根据找到的标签文件确定方法，并加载对应的转移矩阵文件
+    method = labels_data["method"]
+    transition_file = patterns_dir / f"behavior_transition_graph_{method}.json"
     if not transition_file.exists():
         logger.error(f"未找到转移矩阵文件: {transition_file}")
         sys.exit(1)
-    
+
+    logger.info(f"使用转移矩阵文件: {transition_file}")
     with open(transition_file, "r") as f:
         transition_data = json.load(f)
-    
+
     return labels_data, transition_data
 
 
@@ -73,7 +85,7 @@ def load_feature_data(features_file: Path):
     if not features_file.exists():
         logger.error(f"未找到特征数据文件: {features_file}")
         sys.exit(1)
-    
+
     return pd.read_csv(features_file)
 
 
@@ -90,63 +102,57 @@ def evaluate_patterns(input_features_file: Path, input_patterns_dir: Path, outpu
     Returns:
         Path: 评估结果输出目录路径
     """
-    logger.info(f"开始评估行为发现效果")
+    logger.info("开始评估行为发现效果")
     logger.info(f"输入特征文件: {input_features_file}")
     logger.info(f"输入模式结果目录: {input_patterns_dir}")
     logger.info(f"输出评估结果目录: {output_eval_dir}")
-    
+
     # 加载特征数据
     features_df = load_feature_data(input_features_file)
     logger.info(f"特征数据加载完成，共 {len(features_df)} 行")
-    
+
     # 加载行为发现结果
     labels_data, transition_data = load_behavior_data(input_patterns_dir)
-    logger.info(f"行为发现结果加载完成")
-    
+    logger.info("行为发现结果加载完成")
+
     # 初始化评估器
     evaluator = Evaluator()
-    
+
     # 准备评估数据
     # 只使用数值类型的特征，排除非数值列（如时间戳）
     X = features_df.select_dtypes(include=[np.number]).values
     labels = np.array(labels_data["labels"])
     transition_matrix = np.array(transition_data["transition_matrix"])
-    
+
     logger.info(f"特征数据形状: {X.shape}")
     logger.info(f"行为标签形状: {labels.shape}")
     logger.info(f"转移矩阵形状: {transition_matrix.shape}")
-    
-    # 评估聚类质量
-    logger.info("评估聚类质量")
-    clustering_quality = evaluator.evaluate_clustering_quality(X, labels)
-    logger.debug(f"聚类质量评估结果: {clustering_quality}")
-    
+
     # 评估转移质量
     logger.info("评估转移质量")
     transition_quality = evaluator.evaluate_transition_quality(transition_matrix)
     logger.debug(f"转移质量评估结果: {transition_quality}")
-    
+
     # 评估行为分离
     logger.info("评估行为分离")
     behavior_separation = evaluator.evaluate_behavior_separation(X, labels)
     logger.debug(f"行为分离评估结果: {behavior_separation}")
-    
+
     # 整合评估结果
     evaluation_results = {
-        "clustering_quality": clustering_quality,
         "transition_quality": transition_quality,
         "behavior_separation": behavior_separation,
         "transition_matrix": transition_matrix.tolist()
     }
-    
+
     # 生成可视化图表
     logger.info("生成可视化图表")
     evaluator.generate_visualizations(X, labels, transition_matrix, output_eval_dir)
-    
+
     # 保存评估结果
     logger.info("保存评估结果")
     evaluator.save(evaluation_results, output_eval_dir)
-    
+
     logger.info(f"行为发现评估完成，结果已保存到: {output_eval_dir}")
     return output_eval_dir
 
@@ -183,7 +189,7 @@ def main():
     解析命令行参数，调用evaluate_patterns函数评估行为发现效果。
     """
     import argparse
-    
+
     # 添加命令行参数解析
     parser = argparse.ArgumentParser(description="评估网络行为发现效果")
     parser.add_argument(
@@ -235,7 +241,7 @@ def main():
             logger.error(f"在 {input_features_path} 中未找到 merged_features.csv")
             logger.error("请先运行特征提取脚本生成合并特征文件")
             sys.exit(1)
-        
+
         evaluate_patterns(
             merged_features_file, input_patterns_dir, output_eval_dir
         )

@@ -10,11 +10,10 @@ import os
 sys.path.append(os.path.abspath("."))
 sys.path.append(os.path.abspath("src"))
 
-import torch
 import numpy as np
 import pandas as pd
-from pathlib import Path
 import json
+from pathlib import Path
 from network_simulation.utils.logger import get_logger
 from config import (
     DEFAULT_WINDOW_SIZE,
@@ -77,13 +76,12 @@ def preprocess_data(
             valid_loss_values_file = features_dir / "merged_valid_loss_values.json"
             if not valid_loss_values_file.exists():
                 raise FileNotFoundError(f"在 {input_patterns_dir} 及其父目录中未找到 valid_loss_values.json 文件")
-    
+
     with open(valid_loss_values_file, "r") as f:
         valid_loss_values = json.load(f)
 
     # 构建loss_rate到index的映射
     loss_rate_mapping = {value: idx for idx, value in enumerate(valid_loss_values)}
-    N_vals = len(valid_loss_values)
     logger.info(f"合法丢包值: {valid_loss_values}")
     logger.info(f"丢包率映射: {loss_rate_mapping}")
 
@@ -357,9 +355,6 @@ def preprocess_data(
     # 4. 准备训练数据
     # 改进：使用全部有效样本进行训练，而不是只选择连续的6000个样本
     # 这样模型可以学习完整的数据分布，包括极端值
-    sample_length = len(valid_df)  # 使用所有有效样本
-    start_idx = 0
-
     selected_df = valid_df.copy()
     selected_delay_norm = delay_norm.copy()
     selected_loss_norm = loss_norm.copy()
@@ -387,12 +382,9 @@ def preprocess_data(
     features = np.column_stack([selected_delay_norm, selected_loss_norm])
 
     # 6. 转换为张量（适应M1芯片）
-    features_tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(
-        0
-    )  # 添加批次维度
-    behavior_ids_tensor = torch.tensor(
-        selected_behavior_ids, dtype=torch.long
-    ).unsqueeze(0)
+    # 注意：这里注释掉未使用的张量转换，如需使用请取消注释
+    # features_tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0)  # 添加批次维度
+    # behavior_ids_tensor = torch.tensor(selected_behavior_ids, dtype=torch.long).unsqueeze(0)
 
     # 7. 创建输出目录
     output_preprocess_dir.mkdir(parents=True, exist_ok=True)

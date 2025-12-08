@@ -4,7 +4,6 @@ pytest 配置文件
 """
 
 import sys
-import os
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径

@@ -35,7 +35,7 @@ class SmartScheduler:
         # Load behavior labels
         with open(patterns_dir / "behavior_labels.json", "r") as f:
             behavior_labels = json.load(f)
-        logger.debug(f"成功加载行为标签，包含 {len(behavior_labels.get('cluster_stats', []))} 个簇")
+        logger.debug(f"成功加载行为标签，包含 {len(behavior_labels.get('behavior_stats', []))} 个行为类型")
 
         # Load transition graph
         with open(patterns_dir / "behavior_transition_graph.json", "r") as f:

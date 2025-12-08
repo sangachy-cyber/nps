@@ -19,9 +19,6 @@ from pathlib import Path
 from network_simulation.condition_generation.diffusion_model import (
     ConditionDiffusionModel,
 )
-from network_simulation.condition_generation.constraint_injector import (
-    ConstraintInjector,
-)
 from network_simulation.utils.logger import get_logger
 from config import (
     DEFAULT_EPOCHS,
@@ -109,9 +106,6 @@ def train_model(input_preprocess_dir: Path, output_train_dir: Path, max_samples:
         quantile_quantiles = preprocess_data["quantile_quantiles"]
 
     logger.info(f"归一化方法: {normalization_method}")
-
-    # 初始化约束注入器
-    constraint_injector = ConstraintInjector(valid_loss_values)
 
     # 设备设置 - 支持MacBook M1/M2/M3 GPU (MPS)和NVIDIA GPU (CUDA)
     device = torch.device(

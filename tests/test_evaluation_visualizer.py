@@ -6,7 +6,6 @@
 import pytest
 import pandas as pd
 import numpy as np
-from pathlib import Path
 from src.network_simulation.evaluation.visualizer import Visualizer
 
 
@@ -74,9 +73,6 @@ def sample_evaluation_results():
     """创建测试评估结果"""
     return {
         "metrics": {
-            "silhouette_score": 0.65,
-            "calinski_harabasz_score": 200.5,
-            "num_clusters": 3,
         },
         "transition_matrix": np.array([
             [0.8, 0.1, 0.1],
@@ -105,43 +101,28 @@ def test_visualize_evaluation_results(visualizer, sample_evaluation_results, tmp
     """测试可视化评估结果"""
     # 可视化评估结果
     visualizer.visualize_evaluation_results(sample_evaluation_results, tmp_output_dir)
-    
+
     # 验证输出文件存在
-    clustering_metrics_file = tmp_output_dir / "clustering_metrics.png"
     transition_metrics_file = tmp_output_dir / "transition_metrics.png"
-    
+
     # 注意：由于测试环境可能不支持完整的可视化功能，我们只检查文件是否被创建
     # 实际生成的文件可能是空的或不完整的，这在测试环境中是正常的
-    assert clustering_metrics_file.exists()
     assert transition_metrics_file.exists()
 
 
-def test_visualize_clustering_results(visualizer, sample_features, sample_labels, tmp_output_dir):
-    """测试可视化聚类结果"""
-    # 可视化聚类结果
-    visualizer.visualize_clustering_results(sample_features, sample_labels, tmp_output_dir)
-    
-    # 验证输出文件存在
-    pca_scatter_file = tmp_output_dir / "pca_scatter.png"
-    pca_variance_file = tmp_output_dir / "pca_variance.png"
-    pca_scatter_3d_html_file = tmp_output_dir / "pca_scatter_3d.html"
-    
-    # 注意：由于测试环境可能不支持完整的可视化功能，我们只检查文件是否被创建
-    assert pca_scatter_file.exists()
-    assert pca_variance_file.exists()
-    assert pca_scatter_3d_html_file.exists()
+
 
 
 def test_visualize_feature_analysis(visualizer, sample_features_df, sample_labels, tmp_output_dir):
     """测试可视化特征分析"""
     # 可视化特征分析
     visualizer.visualize_feature_analysis(sample_features_df, sample_labels, tmp_output_dir)
-    
+
     # 验证输出文件存在
     feature_distributions_file = tmp_output_dir / "feature_distributions.png"
     feature_correlation_file = tmp_output_dir / "feature_correlation.png"
     feature_scatter_3d_html_file = tmp_output_dir / "feature_scatter_3d.html"
-    
+
     # 注意：由于测试环境可能不支持完整的可视化功能，我们只检查文件是否被创建
     assert feature_distributions_file.exists()
     assert feature_correlation_file.exists()
@@ -152,11 +133,11 @@ def test_visualize_behavior_transition(visualizer, sample_transition_matrix, tmp
     """测试可视化行为转移"""
     # 可视化行为转移
     visualizer.visualize_behavior_transition(sample_transition_matrix, tmp_output_dir)
-    
+
     # 验证输出文件存在
     interactive_transition_file = tmp_output_dir / "interactive_transition_graph.html"
     transition_matrix_heatmap_file = tmp_output_dir / "transition_matrix_heatmap.png"
-    
+
     # 注意：由于测试环境可能不支持完整的可视化功能，我们只检查文件是否被创建
     assert interactive_transition_file.exists()
     assert transition_matrix_heatmap_file.exists()
@@ -168,10 +149,10 @@ def test_visualize_behavior_samples(visualizer, sample_generated_data, tmp_outpu
     window_size = 100
     n_windows = len(sample_generated_data) // window_size
     window_labels = np.random.randint(0, 3, n_windows)
-    
+
     # 可视化行为样本
     visualizer.visualize_behavior_samples(sample_generated_data, window_labels.tolist(), window_size, tmp_output_dir)
-    
+
     # 验证输出目录存在
     assert tmp_output_dir.exists()
     # 注意：由于测试环境可能不支持完整的可视化功能，我们只检查目录是否被创建
@@ -182,7 +163,7 @@ def test_calculate_transition_entropy(visualizer, sample_transition_matrix):
     """测试计算转移熵"""
     # 计算转移熵
     entropy = visualizer._calculate_transition_entropy(sample_transition_matrix)
-    
+
     # 验证结果
     assert isinstance(entropy, float)
     assert entropy >= 0
@@ -192,28 +173,13 @@ def test_calculate_transition_sparsity(visualizer, sample_transition_matrix):
     """测试计算转移稀疏性"""
     # 计算转移稀疏性
     sparsity = visualizer._calculate_transition_sparsity(sample_transition_matrix)
-    
+
     # 验证结果
     assert isinstance(sparsity, float)
     assert 0 <= sparsity <= 1
 
 
-def test_visualize_evaluation_results_no_transition(visualizer, tmp_output_dir):
-    """测试可视化没有转移矩阵的评估结果"""
-    evaluation_results = {
-        "metrics": {
-            "silhouette_score": 0.65,
-            "calinski_harabasz_score": 200.5,
-            "num_clusters": 3,
-        }
-    }
-    
-    # 可视化评估结果
-    visualizer.visualize_evaluation_results(evaluation_results, tmp_output_dir)
-    
-    # 验证输出文件存在
-    clustering_metrics_file = tmp_output_dir / "clustering_metrics.png"
-    assert clustering_metrics_file.exists()
+
 
 
 def test_visualizer_feature_columns(visualizer):

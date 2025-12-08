@@ -92,7 +92,7 @@ def main():
         "--raw-data",
         "-r",
         type=Path,
-        help="可选的原始数据文件，用于保存聚类后的分段",
+        help="可选的原始数据文件，用于保存行为检测后的分段",
     )
     discover_patterns_parser.add_argument(
         "--output",
@@ -101,14 +101,6 @@ def main():
         type=Path,
         help="输出目录",
     )
-    discover_patterns_parser.add_argument(
-        "--method",
-        "-m",
-        choices=["gmm", "kmeans", "hdbscan"],
-        default="hdbscan",
-        help="使用的聚类方法",
-    )
-
     # 命令: generate-simulation
     generate_simulation_parser = subparsers.add_parser(
         "generate-simulation", help="生成网络模拟数据"
@@ -187,7 +179,7 @@ def main():
                 logger.warning("未从输入文件中提取到特征。")
 
         elif args.command == "discover-patterns":
-            pattern_identifier = PatternIdentifier(method=args.method)
+            pattern_identifier = PatternIdentifier(method="rule")
             features = pattern_identifier.load_features(args.input)
 
             # 如果提供了原始数据，加载它

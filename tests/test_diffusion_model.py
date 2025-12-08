@@ -85,7 +85,8 @@ def test_unet_forward(sample_input, device):
     behavior_embed = torch.randn(1, 600, 32, device=device)  # 模拟行为嵌入
 
     # 将 x 转换为 1D 卷积所需的形状 (batch, channels, seq_len)
-    x_conv = x.transpose(1, 2)  # (1, 2, 600)
+    # 注意：这里注释掉未使用的转换，如需使用请取消注释
+    # x_conv = x.transpose(1, 2)  # (1, 2, 600)
 
     unet = UNet(input_dim=2, behavior_embed_dim=32)
     unet.to(device)

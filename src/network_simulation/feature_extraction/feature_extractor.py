@@ -7,7 +7,6 @@
 import pandas as pd
 import numpy as np
 from scipy.stats import linregress
-from sklearn.preprocessing import StandardScaler
 from pathlib import Path
 from typing import Dict, List
 from network_simulation.utils.logger import get_logger
@@ -88,6 +87,10 @@ class FeatureExtractor:
         features_df = pd.DataFrame(features_list)
         logger.info(f"特征提取完成，共提取 {len(features_df)} 条特征记录")
 
+        # Remove highly correlated features
+        features_df = self.remove_highly_correlated_features(features_df)
+        logger.info(f"去除高度相关特征后，剩余特征数: {len([col for col in features_df.columns if col.startswith('feat_')])}")
+
         return features_df
 
     def _extract_valid_loss_values(self, df: pd.DataFrame) -> List[float]:
@@ -124,9 +127,38 @@ class FeatureExtractor:
             val: idx for idx, val in enumerate(self.valid_loss_values)
         }
 
+    def remove_highly_correlated_features(self, features_df: pd.DataFrame) -> pd.DataFrame:
+        """Remove highly correlated features using correlation matrix threshold"""
+        logger.info(f"开始去除高度相关特征，特征行数: {len(features_df)}")
+
+        # Get feature columns (excluding non-feature columns like window_start, window_end, etc.)
+        feature_columns = [col for col in features_df.columns if col.startswith('feat_')]
+
+        if len(feature_columns) <= 1:
+            logger.info("只有1个或更少的特征，不需要去除相关性")
+            return features_df
+
+        # Calculate correlation matrix
+        corr_matrix = features_df[feature_columns].corr().abs()
+
+        # Create a mask to identify highly correlated features
+        # Select upper triangle of correlation matrix
+        upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+
+        # Find features with correlation greater than 0.8
+        to_drop = [column for column in upper.columns if any(upper[column] > 0.8)]
+
+        if to_drop:
+            logger.info(f"去除高度相关特征: {to_drop}")
+            # Drop the highly correlated features
+            return features_df.drop(to_drop, axis=1)
+        else:
+            logger.info("没有高度相关的特征需要去除")
+            return features_df
+
     def normalize_features(self, features_df: pd.DataFrame) -> pd.DataFrame:
         """Normalize features using appropriate scalers:
-        - delay-related features: StandardScaler
+        - delay-related features: RobustScaler
         - loss-related features: RobustScaler
         """
         logger.info(f"开始归一化特征，特征行数: {len(features_df)}")
@@ -134,21 +166,19 @@ class FeatureExtractor:
         # Create a copy to avoid modifying the original
         normalized_features = features_df.copy()
 
+        # Get feature columns (excluding non-feature columns)
+        feature_columns = [col for col in normalized_features.columns if col.startswith('feat_')]
+
         # Separate feature columns into delay-related and loss-related
         delay_features = [
-            "feat_delay_std",
-            "feat_delay_trend",
-            "feat_delay_acf_5",
+            col for col in feature_columns
+            if 'delay' in col
         ]
         logger.debug(f"延迟相关特征: {delay_features}")
 
         loss_features = [
-            "feat_loss_nonzero_ratio",
-            "feat_loss_high_ratio",
-            "feat_max_consec_loss",
-            "feat_loss_unique_values",
-            "feat_loss_mode_encoded",
-            "feat_loss_pattern_std",
+            col for col in feature_columns
+            if 'loss' in col or 'congestion' in col or 'burst' in col
         ]
         logger.debug(f"丢包相关特征: {loss_features}")
 
@@ -164,19 +194,20 @@ class FeatureExtractor:
         # Initialize scalers
         from sklearn.preprocessing import RobustScaler
 
-        delay_scaler = StandardScaler()
-        loss_scaler = RobustScaler()
+        # Normalize only if there are features to normalize
+        if delay_features:
+            delay_scaler = RobustScaler()
+            normalized_features[delay_features] = delay_scaler.fit_transform(
+                normalized_features[delay_features]
+            )
+            logger.debug("延迟相关特征已使用RobustScaler归一化")
 
-        # Normalize the features with appropriate scalers
-        normalized_features[delay_features] = delay_scaler.fit_transform(
-            normalized_features[delay_features]
-        )
-        logger.debug("延迟相关特征已使用StandardScaler归一化")
-
-        normalized_features[loss_features] = loss_scaler.fit_transform(
-            normalized_features[loss_features]
-        )
-        logger.debug("丢包相关特征已使用RobustScaler归一化")
+        if loss_features:
+            loss_scaler = RobustScaler()
+            normalized_features[loss_features] = loss_scaler.fit_transform(
+                normalized_features[loss_features]
+            )
+            logger.debug("丢包相关特征已使用RobustScaler归一化")
 
         logger.info("特征归一化完成")
         return normalized_features
@@ -196,9 +227,12 @@ class FeatureExtractor:
         delays = window["delay"].values
         loss_rates = window["loss_rate"].values
 
+        # Apply log1 transformation to delay
+        delays_log1 = np.log(1 + delays)
+
         # 1. 时序动态特征
-        # feat_delay_std: 10秒窗口内时延的标准差
-        features["feat_delay_std"] = np.std(delays)
+        # feat_delay_std: 10秒窗口内时延的标准差（基于log1变换）
+        features["feat_delay_std"] = np.std(delays_log1)
 
         # feat_loss_nonzero_ratio: 10秒窗口内 loss_rate > 0 的采样点比例
         non_zero_loss = np.sum(loss_rates > 0)
@@ -214,28 +248,20 @@ class FeatureExtractor:
             loss_rates
         )
 
-        # feat_loss_unique_values: 窗口内非零 loss_rate 的唯一取值个数
-        non_zero_loss_values = loss_rates[loss_rates > 0]
-        features["feat_loss_unique_values"] = (
-            len(np.unique(non_zero_loss_values)) if len(non_zero_loss_values) > 0 else 0
-        )
+        # feat_max_congestion_run: 最长连续满足 (delay ≥ 500ms & loss ≥ 0.3) 的点数
+        features["feat_max_congestion_run"] = self._calculate_max_congestion_run(delays, loss_rates)
 
         # 3. 长期趋势特征
-        # feat_delay_trend: 基于10秒窗口内 delay 序列的 Theil-Sen 稳健斜率估计
-        features["feat_delay_trend"] = self._calculate_delay_trend(delays)
+        # feat_delay_trend: 基于10秒窗口内 delay 序列的 Theil-Sen 稳健斜率估计（基于log1变换）
+        features["feat_delay_trend"] = self._calculate_delay_trend(delays_log1)
 
         # 4. 统计分布特征
-        # feat_delay_acf_5: 时延序列的5阶自相关系数
-        features["feat_delay_acf_5"] = self._calculate_acf(delays, lag=5)
+        # feat_delay_acf_5: 时延序列的5阶自相关系数（基于log1变换）
+        features["feat_delay_acf_5"] = self._calculate_acf(delays_log1, lag=5)
 
         # feat_loss_mode_encoded: 将窗口内 loss_rate 的众数映射为序数编码
         features["feat_loss_mode_encoded"] = self._calculate_loss_mode_encoded(
             loss_rates
-        )
-
-        # feat_loss_pattern_std: 仅在 loss_rate > 0 的点上计算标准差
-        features["feat_loss_pattern_std"] = (
-            np.std(non_zero_loss_values) if len(non_zero_loss_values) > 0 else 0.0
         )
 
         return features
@@ -247,6 +273,21 @@ class FeatureExtractor:
 
         for loss in loss_rates:
             if loss > 0:
+                current_consec += 1
+                if current_consec > max_consec:
+                    max_consec = current_consec
+            else:
+                current_consec = 0
+
+        return max_consec
+
+    def _calculate_max_congestion_run(self, delays: np.ndarray, loss_rates: np.ndarray) -> int:
+        """Calculate the maximum number of consecutive samples where delay ≥ 500ms and loss ≥ 0.3"""
+        max_consec = 0
+        current_consec = 0
+
+        for delay, loss in zip(delays, loss_rates):
+            if delay >= 500 and loss >= 0.3:
                 current_consec += 1
                 if current_consec > max_consec:
                     max_consec = current_consec

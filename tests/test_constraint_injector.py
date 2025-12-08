@@ -94,23 +94,20 @@ def test_constraint_injector_fix_sequence(constraint_injector):
 
 def test_constraint_injector_edge_cases(constraint_injector):
     """测试边界情况"""
-    # 空数组
+    # 空序列测试
     empty_delay = np.array([])
     empty_loss_rate = np.array([])
-
     validation = constraint_injector.validate_sequence(empty_delay, empty_loss_rate)
-    assert validation["all_valid"] == True
+    assert validation["all_valid"]
 
     # 单个元素
     single_delay = np.array([10.0])
-    single_loss_rate = np.array([0.5])
-
+    single_loss_rate = np.array([0.01])
     validation = constraint_injector.validate_sequence(single_delay, single_loss_rate)
-    assert validation["all_valid"] == True
+    assert validation["all_valid"]
 
     # 全零数据
-    zero_delay = np.zeros(100)
-    zero_loss_rate = np.zeros(100)
-
+    zero_delay = np.array([0.0] * 100)
+    zero_loss_rate = np.array([0.0] * 100)
     validation = constraint_injector.validate_sequence(zero_delay, zero_loss_rate)
-    assert validation["all_valid"] == True
+    assert validation["all_valid"]

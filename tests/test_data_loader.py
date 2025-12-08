@@ -121,7 +121,7 @@ def test_load_csv_data(data_loader, sample_csv_file, sample_csv_data):
     """测试加载CSV格式数据"""
     # 加载数据
     df = data_loader.load(sample_csv_file)
-    
+
     # 验证数据加载结果
     assert isinstance(df, pd.DataFrame)
     assert len(df) == len(sample_csv_data)
@@ -129,7 +129,7 @@ def test_load_csv_data(data_loader, sample_csv_file, sample_csv_data):
     assert pd.api.types.is_datetime64_any_dtype(df["timestamp"])
     assert pd.api.types.is_float_dtype(df["delay"])
     assert pd.api.types.is_float_dtype(df["loss_rate"])
-    
+
     # 验证丢包率在0-1范围内
     assert df["loss_rate"].min() >= 0
     assert df["loss_rate"].max() <= 1
@@ -139,11 +139,11 @@ def test_load_csv_data_with_percentage_loss(data_loader, sample_csv_file_with_pe
     """测试加载包含百分比形式丢包率的CSV数据"""
     # 加载数据
     df = data_loader.load(sample_csv_file_with_percentage_loss)
-    
+
     # 验证数据加载结果
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 100
-    
+
     # 验证丢包率已转换为小数形式且在0-1范围内
     assert df["loss_rate"].min() >= 0
     assert df["loss_rate"].max() <= 1
@@ -155,13 +155,13 @@ def test_load_holowan_data(data_loader, sample_holowan_file):
     """测试加载HoloWAN Recorder File格式数据"""
     # 加载数据
     df = data_loader.load(sample_holowan_file)
-    
+
     # 验证数据加载结果
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 3  # 3行数据
     assert list(df.columns) == ["timestamp", "delay", "loss_rate"]
     assert pd.api.types.is_datetime64_any_dtype(df["timestamp"])
-    
+
     # 验证丢包率处理
     assert df["loss_rate"].min() >= 0
     assert df["loss_rate"].max() <= 1
@@ -173,16 +173,16 @@ def test_preprocess(data_loader, sample_csv_data):
     """测试数据预处理"""
     # 预处理数据
     df_processed = data_loader.preprocess(sample_csv_data)
-    
+
     # 验证预处理结果
     assert isinstance(df_processed, pd.DataFrame)
     assert len(df_processed) > 0
     assert list(df_processed.columns) == ["timestamp", "delay", "loss_rate"]
-    
+
     # 验证丢包率在0-1范围内
     assert df_processed["loss_rate"].min() >= 0
     assert df_processed["loss_rate"].max() <= 1
-    
+
     # 验证时间戳排序
     assert df_processed["timestamp"].is_monotonic_increasing
 
@@ -191,7 +191,7 @@ def test_preprocess_with_large_delay(data_loader, sample_data_with_large_delay):
     """测试处理包含大延迟的数据"""
     # 预处理数据
     df_processed = data_loader.preprocess(sample_data_with_large_delay)
-    
+
     # 验证数据被截断
     assert len(df_processed) < len(sample_data_with_large_delay)
     # 验证截断后的数据中没有超过2000ms的延迟
@@ -202,14 +202,14 @@ def test_save_data(data_loader, sample_csv_data, tmp_output_dir):
     """测试保存处理后的数据"""
     # 预处理数据
     df_processed = data_loader.preprocess(sample_csv_data)
-    
+
     # 保存数据
     output_path = tmp_output_dir / "processed_data.csv"
     data_loader.save(df_processed, output_path)
-    
+
     # 验证文件存在
     assert output_path.exists()
-    
+
     # 验证文件内容
     loaded_df = pd.read_csv(output_path, parse_dates=["timestamp"])
     assert isinstance(loaded_df, pd.DataFrame)
@@ -221,10 +221,10 @@ def test_preprocess_empty_data(data_loader):
     """测试处理空数据"""
     # 创建空数据框
     empty_df = pd.DataFrame(columns=["timestamp", "delay", "loss_rate"])
-    
+
     # 预处理数据
     df_processed = data_loader.preprocess(empty_df)
-    
+
     # 验证处理结果为空
     assert len(df_processed) == 0
 
@@ -232,7 +232,7 @@ def test_preprocess_empty_data(data_loader):
 def test_load_nonexistent_file(data_loader):
     """测试加载不存在的文件"""
     nonexistent_file = Path("/nonexistent/path/to/file.csv")
-    
+
     # 验证加载不存在的文件会抛出异常
     with pytest.raises(ValueError):
         data_loader.load(nonexistent_file)

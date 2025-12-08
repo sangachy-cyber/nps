@@ -4,10 +4,6 @@ CLI模块测试用例
 """
 
 import pytest
-import sys
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-from src.network_simulation.cli import main
 
 
 @pytest.fixture

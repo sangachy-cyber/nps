@@ -6,7 +6,6 @@
 import pytest
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from src.network_simulation.visualization.visualizer import Visualizer
 
 
@@ -66,11 +65,9 @@ def sample_transition_matrix():
 def sample_evaluation_results():
     """创建测试评估结果"""
     return {
-        "method": "hdbscan",
+        "method": "rule",
         "labels": np.random.randint(0, 3, 100).tolist(),
         "metrics": {
-            "silhouette_score": 0.65,
-            "calinski_harabasz_score": 200.5,
             "average_transition_entropy": 0.8,
             "transition_sparsity": 0.9
         },
@@ -130,7 +127,7 @@ def test_visualize_evaluation_results(visualizer, sample_evaluation_results):
     """测试可视化评估结果"""
     # 可视化评估结果
     html_snippet = visualizer.visualize_evaluation_results(sample_evaluation_results)
-    
+
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "评估结果可视化" in html_snippet
@@ -140,7 +137,7 @@ def test_visualize_pca_scatter(visualizer, sample_features, sample_labels):
     """测试可视化PCA散点图"""
     # 可视化PCA散点图
     html_snippet = visualizer.visualize_pca_scatter(sample_features, sample_labels, "test_method")
-    
+
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "data:image/png;base64" in html_snippet
@@ -150,7 +147,7 @@ def test_visualize_pca_variance(visualizer, sample_features):
     """测试可视化PCA方差解释图"""
     # 可视化PCA方差解释图
     html_snippet = visualizer.visualize_pca_variance(sample_features, "test_method")
-    
+
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "data:image/png;base64" in html_snippet
@@ -160,7 +157,7 @@ def test_visualize_tsne_scatter(visualizer, sample_features, sample_labels):
     """测试可视化t-SNE散点图"""
     # 可视化t-SNE散点图
     html_snippet = visualizer.visualize_tsne_scatter(sample_features, sample_labels, "test_method")
-    
+
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "data:image/png;base64" in html_snippet
@@ -170,7 +167,7 @@ def test_visualize_umap_scatter(visualizer, sample_features, sample_labels):
     """测试可视化UMAP散点图"""
     # 可视化UMAP散点图
     html_snippet = visualizer.visualize_umap_scatter(sample_features, sample_labels, "test_method")
-    
+
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "data:image/png;base64" in html_snippet
@@ -180,7 +177,7 @@ def test_visualize_feature_distribution(visualizer, sample_features, sample_labe
     """测试可视化特征分布"""
     # 可视化特征分布
     html_snippet = visualizer.visualize_feature_distribution(sample_features, sample_labels, sample_feature_names, "test_method")
-    
+
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "data:image/png;base64" in html_snippet
@@ -190,7 +187,7 @@ def test_visualize_correlation_heatmap(visualizer, sample_features, sample_featu
     """测试可视化特征相关性热力图"""
     # 可视化特征相关性热力图
     html_snippet = visualizer.visualize_correlation_heatmap(sample_features, sample_feature_names, "test_method")
-    
+
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "data:image/png;base64" in html_snippet
@@ -200,7 +197,7 @@ def test_visualize_transition_matrix(visualizer, sample_transition_matrix):
     """测试可视化转移矩阵"""
     # 可视化转移矩阵
     html_snippet = visualizer.visualize_transition_matrix(sample_transition_matrix, "test_method")
-    
+
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "data:image/png;base64" in html_snippet
@@ -214,7 +211,7 @@ def test_generate_html_report(visualizer, sample_evaluation_results, sample_feat
         sample_features,
         sample_feature_names
     )
-    
+
     # 验证报告文件生成
     report_file = visualizer.output_dir / f"behavior_pattern_report_{sample_evaluation_results['method']}.html"
     assert report_file.exists()
@@ -229,7 +226,7 @@ def test_generate_html_report_no_raw_data(visualizer, sample_evaluation_results,
         sample_features,
         sample_feature_names
     )
-    
+
     # 验证报告文件生成
     report_file = visualizer.output_dir / f"behavior_pattern_report_{sample_evaluation_results['method']}.html"
     assert report_file.exists()
@@ -243,7 +240,7 @@ def test_generate_separation_table(visualizer, sample_evaluation_results, sample
         sample_evaluation_results["separation_metrics"],
         sample_feature_names
     )
-    
+
     # 验证结果
     assert isinstance(html_table, str)
     assert "<tr>" in html_table
@@ -254,7 +251,7 @@ def test_visualize_raw_data_samples(visualizer, sample_raw_data, sample_features
     """测试可视化原始数据样本"""
     # 创建与features_df行数匹配的标签
     sample_labels = np.random.randint(0, 3, len(sample_features_df))
-    
+
     # 可视化原始数据样本
     html_snippet = visualizer.visualize_raw_data_samples(
         sample_raw_data,
@@ -262,7 +259,7 @@ def test_visualize_raw_data_samples(visualizer, sample_raw_data, sample_features
         sample_labels,
         "test_method"
     )
-    
+
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "原始数据样本可视化" in html_snippet

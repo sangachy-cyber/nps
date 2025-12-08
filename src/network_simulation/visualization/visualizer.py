@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Network Behavior Visualization Module
-Responsible for visualizing network behavior patterns and evaluation results
+网络行为可视化模块
+负责可视化网络行为模式和评估结果
 """
 
 import pandas as pd
@@ -22,30 +22,30 @@ from ..utils.logger import get_logger
 logger = get_logger(__name__)
 
 class Visualizer:
-    """Visualizes network behavior patterns and evaluation results"""
+    """可视化网络行为模式和评估结果"""
 
     def __init__(self, output_dir: Path):
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Set Chinese font support, prefer WenQuanYi Zen Hei on Linux
+        # 设置中文支持，Linux系统优先使用文泉驿正黑
         plt.rcParams["font.sans-serif"] = ["WenQuanYi Zen Hei", "SimHei", "Arial Unicode MS", "DejaVu Sans"]
         plt.rcParams["axes.unicode_minus"] = False
 
     def visualize_evaluation_results(self, results: Dict) -> str:
-        """Visualize evaluation results and return HTML snippet"""
-        # This will be implemented later
+        """可视化评估结果并返回HTML片段"""
+        # 后续将实现
         return "<h2>评估结果可视化</h2>"
 
     def visualize_pca_scatter(
         self, X: np.ndarray, labels: np.ndarray, method: str
     ) -> str:
-        """Visualize PCA scatter plot and return HTML snippet"""
-        # Perform PCA
+        """可视化PCA散点图并返回HTML片段"""
+        # 执行PCA
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X)
 
-        # Create scatter plot
+        # 创建散点图
         plt.figure(figsize=(10, 8))
         unique_labels = np.unique(labels)
         colors = sns.color_palette("hsv", len(unique_labels))
@@ -66,7 +66,7 @@ class Visualizer:
         plt.legend()
         plt.grid(True, alpha=0.3)
 
-        # Save plot to buffer
+        # 保存图表到缓冲区
         buffer = BytesIO()
         plt.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
         buffer.seek(0)
@@ -76,12 +76,12 @@ class Visualizer:
         return f'<img src="data:image/png;base64,{img_base64}" alt="PCA 散点图">'
 
     def visualize_pca_variance(self, X: np.ndarray, method: str) -> str:
-        """Visualize PCA variance explained and return HTML snippet"""
-        # Perform PCA
+        """可视化PCA方差解释并返回HTML片段"""
+        # 执行PCA
         pca = PCA(n_components=min(8, X.shape[1]))
         pca.fit(X)
 
-        # Create variance explained plot
+        # 创建方差解释图
         plt.figure(figsize=(10, 6))
         explained_variance = pca.explained_variance_ratio_
         cumulative_variance = np.cumsum(explained_variance)
@@ -105,7 +105,7 @@ class Visualizer:
         plt.legend(loc="best")
         plt.grid(True, alpha=0.3)
 
-        # Save plot to buffer
+        # 保存图表到缓冲区
         buffer = BytesIO()
         plt.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
         buffer.seek(0)
@@ -117,8 +117,8 @@ class Visualizer:
     def visualize_tsne_scatter(
         self, X: np.ndarray, labels: np.ndarray, method: str
     ) -> str:
-        """Visualize t-SNE scatter plot and return HTML snippet"""
-        # Perform t-SNE
+        """可视化t-SNE散点图并返回HTML片段"""
+        # 执行t-SNE
         perplexity = 30
         max_iter = 300
         tsne = TSNE(
@@ -126,7 +126,7 @@ class Visualizer:
         )
         X_tsne = tsne.fit_transform(X)
 
-        # Create scatter plot
+        # 创建散点图
         plt.figure(figsize=(10, 8))
         unique_labels = np.unique(labels)
         colors = sns.color_palette("hsv", len(unique_labels))
@@ -149,7 +149,7 @@ class Visualizer:
         plt.legend()
         plt.grid(True, alpha=0.3)
 
-        # Save plot to buffer
+        # 保存图表到缓冲区
         buffer = BytesIO()
         plt.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
         buffer.seek(0)
@@ -161,8 +161,8 @@ class Visualizer:
     def visualize_umap_scatter(
         self, X: np.ndarray, labels: np.ndarray, method: str
     ) -> str:
-        """Visualize UMAP scatter plot and return HTML snippet"""
-        # Perform UMAP
+        """可视化UMAP散点图并返回HTML片段"""
+        # 执行UMAP
         n_neighbors = 15
         min_dist = 0.1
         umap = UMAP(
@@ -170,7 +170,7 @@ class Visualizer:
         )
         X_umap = umap.fit_transform(X)
 
-        # Create scatter plot
+        # 创建散点图
         plt.figure(figsize=(10, 8))
         unique_labels = np.unique(labels)
         colors = sns.color_palette("hsv", len(unique_labels))
@@ -193,7 +193,7 @@ class Visualizer:
         plt.legend()
         plt.grid(True, alpha=0.3)
 
-        # Save plot to buffer
+        # 保存图表到缓冲区
         buffer = BytesIO()
         plt.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
         buffer.seek(0)
@@ -205,11 +205,11 @@ class Visualizer:
     def visualize_feature_distribution(
         self, X: np.ndarray, labels: np.ndarray, feature_names: List[str], method: str
     ) -> str:
-        """Visualize feature distributions and return HTML snippet"""
+        """可视化特征分布并返回HTML片段"""
         unique_labels = np.unique(labels)
         n_features = len(feature_names)
 
-        # Create subplots
+        # 创建子图
         fig, axes = plt.subplots(
             n_features, 1, figsize=(12, 3 * n_features), sharex=False
         )
@@ -228,7 +228,7 @@ class Visualizer:
 
         plt.tight_layout()
 
-        # Save plot to buffer
+        # 保存图表到缓冲区
         buffer = BytesIO()
         plt.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
         buffer.seek(0)
@@ -240,11 +240,11 @@ class Visualizer:
     def visualize_correlation_heatmap(
         self, X: np.ndarray, feature_names: List[str], method: str
     ) -> str:
-        """Visualize correlation heatmap and return HTML snippet"""
-        # Calculate correlation matrix
+        """可视化特征相关性热力图并返回HTML片段"""
+        # 计算相关系数矩阵
         corr_matrix = np.corrcoef(X.T)
 
-        # Create heatmap
+        # 创建热力图
         plt.figure(figsize=(12, 10))
         sns.heatmap(
             corr_matrix,
@@ -259,7 +259,7 @@ class Visualizer:
         plt.xticks(rotation=45, ha="right")
         plt.tight_layout()
 
-        # Save plot to buffer
+        # 保存图表到缓冲区
         buffer = BytesIO()
         plt.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
         buffer.seek(0)
@@ -271,8 +271,8 @@ class Visualizer:
     def visualize_transition_matrix(
         self, transition_matrix: np.ndarray, method: str
     ) -> str:
-        """Visualize transition matrix heatmap and return HTML snippet"""
-        # Create heatmap
+        """可视化状态转移矩阵热力图并返回HTML片段"""
+        # 创建热力图
         plt.figure(figsize=(10, 8))
         sns.heatmap(
             transition_matrix,
@@ -288,7 +288,7 @@ class Visualizer:
         plt.ylabel("当前状态")
         plt.tight_layout()
 
-        # Save plot to buffer
+        # 保存图表到缓冲区
         buffer = BytesIO()
         plt.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
         buffer.seek(0)
@@ -307,7 +307,7 @@ class Visualizer:
         raw_data: pd.DataFrame = None,
         features_df: pd.DataFrame = None,
     ) -> None:
-        """Generate comprehensive HTML report"""
+        """生成综合HTML报告"""
         method = results["method"]
 
         # Create HTML content
@@ -424,10 +424,16 @@ class Visualizer:
                 </div>
 
                 <div class="section">
-                    <h2>7. 原始数据样本可视化</h2>
-                    <p>以下是每个行为类别的典型样本对应的原始时延和丢包率可视化：</p>
-                    {self.visualize_raw_data_samples(raw_data, features_df, results["labels"], method) if (raw_data is not None and features_df is not None) else "<p>原始数据未提供，无法生成原始数据样本可视化</p>"}
-                </div>
+            <h2>7. 标签时间轴图</h2>
+            <p>全局行为分布可视化，展示不同网络行为在时间轴上的分布：</p>
+            {self.visualize_label_timeline(raw_data, features_df, results["labels"], method) if (raw_data is not None and features_df is not None) else "<p>原始数据未提供，无法生成标签时间轴图</p>"}
+        </div>
+
+        <div class="section">
+            <h2>8. 原始数据样本可视化</h2>
+            <p>以下是每个行为类别的典型样本对应的原始时延和丢包率可视化：</p>
+            {self.visualize_raw_data_samples(raw_data, features_df, results["labels"], method) if (raw_data is not None and features_df is not None) else "<p>原始数据未提供，无法生成原始数据样本可视化</p>"}
+        </div>
             </div>
         </body>
         </html>
@@ -443,7 +449,7 @@ class Visualizer:
     def _generate_separation_table(
         self, separation_metrics: Dict, feature_names: List[str]
     ) -> str:
-        """Generate HTML table for separation metrics"""
+        """生成分离度指标的HTML表格"""
         table_rows = []
         for label in separation_metrics["label_means"].keys():
             means = separation_metrics["label_means"][label]
@@ -460,7 +466,7 @@ class Visualizer:
         labels: np.ndarray,
         method: str,
     ) -> str:
-        """Visualize raw data samples for each behavior category"""
+        """可视化每个行为类别的原始数据样本"""
         import random
 
         html_snippets = ["<h2>原始数据样本可视化</h2>"]
@@ -528,7 +534,7 @@ class Visualizer:
                     ax2.set_ylim(0, 1.1)  # Loss rate is between 0 and 1
 
                     # Add title and legend
-                    plt.title(f"行为类别 {label} - 样本 {i + 1} ({method} 聚类)")
+                    plt.title(f"行为类别 {label} - 样本 {i + 1} ({method} 规则检测)")
                     lines1, labels1 = ax1.get_legend_handles_labels()
                     lines2, labels2 = ax2.get_legend_handles_labels()
                     ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
@@ -553,5 +559,81 @@ class Visualizer:
 
                 # Close the flex container
                 html_snippets.append("</div>")
+
+        return "".join(html_snippets)
+
+    def visualize_label_timeline(
+        self,
+        raw_data: pd.DataFrame,
+        features_df: pd.DataFrame,
+        labels: np.ndarray,
+        method: str,
+    ) -> str:
+        """可视化全局行为分布的标签时间轴"""
+        html_snippets = ["<h2>标签时间轴图</h2>"]
+
+        # 确保labels是numpy数组
+        labels = np.array(labels)
+
+        # 创建时间轴图
+        plt.figure(figsize=(15, 6))
+
+        # 为不同标签创建颜色映射
+        unique_labels = np.unique(labels)
+        color_map = plt.cm.get_cmap('tab10', len(unique_labels))
+
+        # 绘制每个窗口标签的水平条
+        for i, label in enumerate(labels):
+            window_start = int(features_df.iloc[i]['window_start'])
+            window_end = int(features_df.iloc[i]['window_end'])
+
+            # 确保window_end不超过raw_data长度
+            window_end = min(window_end, len(raw_data))
+
+            # 获取此窗口的时间范围
+            window_time_start = raw_data.iloc[window_start]['timestamp']
+            window_time_end = raw_data.iloc[window_end-1]['timestamp']
+
+            # 绘制条形
+            plt.barh(y=0, left=window_time_start, width=window_time_end-window_time_start,
+                    color=color_map(label), edgecolor='none')
+
+        # 添加图例
+        legend_handles = []
+        for label in unique_labels:
+            handle = plt.Rectangle((0, 0), 1, 1, color=color_map(label))
+            legend_handles.append(handle)
+
+        # 定义行为标签映射
+        behavior_labels = {
+            0: "稳定",
+            1: "弱突发",
+            2: "强突发",
+            3: "瞬时峰值",
+            4: "高延迟无丢包"
+        }
+
+        # 使用行为标签（如果可用），否则使用数字标签
+        legend_labels = [behavior_labels.get(label, f"类别 {label}") for label in unique_labels]
+        plt.legend(legend_handles, legend_labels, loc='center', bbox_to_anchor=(0.5, -0.15),
+                  ncol=len(unique_labels))
+
+        # 设置图表标题和标签
+        plt.title(f"全局行为分布时间轴 ({method} 规则检测)")
+        plt.xlabel("时间")
+        plt.ylabel("行为类别")
+        plt.yticks([])  # 隐藏y轴刻度
+        plt.grid(True, axis='x', alpha=0.3)
+        plt.tight_layout()
+
+        # 保存图表到缓冲区
+        buffer = BytesIO()
+        plt.savefig(buffer, format="png", dpi=150, bbox_inches="tight")
+        buffer.seek(0)
+        img_base64 = base64.b64encode(buffer.read()).decode("utf-8")
+        plt.close()
+
+        # 添加到HTML片段
+        html_snippets.append(f'<img src="data:image/png;base64,{img_base64}" alt="标签时间轴图" style="width: 100%; height: auto;">')
 
         return "".join(html_snippets)

@@ -92,8 +92,8 @@ def discover_patterns(
             valid_loss_values = [0.0]  # 至少包含0.0
             logger.info(f"生成的合法丢包值: {valid_loss_values}")
 
-    # 初始化模式识别器
-    pattern_identifier = PatternIdentifier(method="hdbscan")
+    # 初始化模式识别器 - 使用规则检测方法
+    pattern_identifier = PatternIdentifier(method="rule")
 
     # 识别行为模式
     patterns = pattern_identifier.identify(features_df, processed_df)
@@ -191,10 +191,7 @@ def main():
     # 确保输出目录存在
     output_patterns_dir.mkdir(parents=True, exist_ok=True)
 
-    # 清理旧文件
-    cleanup_old_files(output_patterns_dir, "behavior_labels_hdbscan.json")
-    cleanup_old_files(output_patterns_dir, "behavior_hdbscan_model.pkl")
-    cleanup_old_files(output_patterns_dir, "behavior_transition_graph_hdbscan.json")
+
 
     # 发现行为模式
     if input_features_path.is_file() and input_processed_path.is_file():

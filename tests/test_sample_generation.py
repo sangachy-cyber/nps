@@ -6,7 +6,6 @@
 import pytest
 import torch
 import numpy as np
-from pathlib import Path
 from src.network_simulation.condition_generation.diffusion_model import ConditionDiffusionModel
 from src.network_simulation.condition_generation.constraint_injector import ConstraintInjector
 
@@ -68,22 +67,22 @@ def test_sample_generation(diffusion_model, sample_behavior_ids, constraint_inje
     # 生成样本
     with torch.no_grad():
         generated = diffusion_model.sample(sample_behavior_ids, sample_behavior_ids.device)
-    
+
     # 验证生成结果的形状
     assert generated.shape == sample_behavior_ids.shape + (2,)
-    
+
     # 转换为numpy数组
     generated_np = generated.cpu().numpy()[0]
-    
+
     # 验证生成的延迟和丢包率
     delay_norm = generated_np[:, 0]
     loss_norm = generated_np[:, 1]
-    
+
     # 验证延迟范围
     delay = (delay_norm + 1) * 100
     delay = np.clip(delay, 0, None)
     assert np.all(delay >= 0)  # 延迟不能为负
-    
+
     # 验证丢包率处理
     loss_rate = constraint_injector.process_loss_rate(loss_norm)
     assert len(loss_rate) == len(loss_norm)
@@ -95,14 +94,14 @@ def test_sample_generation_shape(diffusion_model, device):
     """测试不同形状的样本生成"""
     batch_sizes = [1, 2]
     seq_lens = [100, 200]
-    
+
     for batch_size in batch_sizes:
         for seq_len in seq_lens:
             behavior_ids = torch.randint(0, 3, (batch_size, seq_len), device=device)
-            
+
             with torch.no_grad():
                 generated = diffusion_model.sample(behavior_ids, device)
-            
+
             assert generated.shape == (batch_size, seq_len, 2)
 
 
@@ -110,14 +109,14 @@ def test_constraint_injector_processing(constraint_injector):
     """测试约束注入器处理"""
     # 创建测试数据
     loss_values = np.array([-0.5, 0.0, 0.25, 0.5, 0.75, 1.0, 1.5])
-    
+
     # 处理丢包率
     processed = constraint_injector.process_loss_rate(loss_values)
-    
+
     # 验证处理结果
     for lr in processed:
         assert lr in constraint_injector.valid_loss_values
-    
+
     # 验证处理后的丢包率范围
     assert np.all(np.array(processed) >= 0)
     assert np.all(np.array(processed) <= 1)
