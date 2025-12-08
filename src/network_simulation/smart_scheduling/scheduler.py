@@ -45,7 +45,7 @@ class SmartScheduler:
         patterns = {
             "behavior_labels": behavior_labels,
             "transition_graph": transition_graph,
-            "cluster_stats": behavior_labels["cluster_stats"],
+            "behavior_stats": behavior_labels["behavior_stats"],
         }
 
         return patterns
@@ -68,17 +68,17 @@ class SmartScheduler:
             current_behavior = segments[i]["behavior_type"]
             next_behavior = segments[i + 1]["behavior_type"]
 
-            # Map behavior types to cluster labels
-            behavior_cluster_map = patterns.get(
-                "behavior_cluster_map",
+            # Map behavior types to behavior labels
+            behavior_map = patterns.get(
+                "behavior_map",
                 {"stable": 0, "burst_loss": 1, "high_jitter": 2, "recovery": 3},
             )
 
-            current_cluster = behavior_cluster_map.get(current_behavior, 0)
-            next_cluster = behavior_cluster_map.get(next_behavior, 0)
+            current_behavior_id = behavior_map.get(current_behavior, 0)
+            next_behavior_id = behavior_map.get(next_behavior, 0)
 
             # Check transition probability
-            transition_prob = transition_matrix[current_cluster][next_cluster]
+            transition_prob = transition_matrix[current_behavior_id][next_behavior_id]
             logger.debug(f"从 {current_behavior} 到 {next_behavior} 的转移概率: {transition_prob:.4f}")
 
             if transition_prob < 0.01:  # Threshold for reasonable transition

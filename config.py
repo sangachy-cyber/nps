@@ -43,6 +43,24 @@ KEEP_LATEST_FILES = 1
 DEFAULT_SAMPLE_LENGTH = 6000
 DEFAULT_NUM_GROUPS = 2
 
-# 窗口配置
-DEFAULT_WINDOW_SIZE = 100
-DEFAULT_STRIDE = 50
+# 可视化相关配置
+VISUALIZATION_DIR = DATA_DIR / "visualization"
+PLOTS_DIR = VISUALIZATION_DIR / "plots"
+BEHAVIOR_SAMPLES_DIR = PLOTS_DIR / "behavior_samples"
+TIMELINES_DIR = PLOTS_DIR / "timelines"
+FEATURE_SPACE_DIR = PLOTS_DIR / "feature_space"
+
+# 报告相关配置
+REPORTS_DIR = RESULTS_DIR / "reports"
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# 可视化文件名配置
+DEFAULT_INTERACTIVE_TRANSITION_GRAPH = "interactive_transition_graph.html"
+DEFAULT_TRANSITION_MATRIX_HEATMAP = "transition_matrix_heatmap.png"
+DEFAULT_TRANSITION_METRICS = "transition_metrics.png"
+DEFAULT_TYPICAL_SAMPLES = "typical_samples.png"
+DEFAULT_BEHAVIOR_SAMPLE_PREFIX = "behavior_"
+
+# 报告文件名配置
+DEFAULT_HTML_REPORT_NAME = "behavior_pattern_report.html"
+DEFAULT_MD_REPORT_NAME = "behavior_pattern_report.md"

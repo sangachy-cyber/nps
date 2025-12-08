@@ -179,8 +179,8 @@ def test_load_patterns(smart_scheduler, sample_patterns_dir):
     assert isinstance(loaded_patterns, dict)
     assert "behavior_labels" in loaded_patterns
     assert "transition_graph" in loaded_patterns
-    assert "cluster_stats" in loaded_patterns
-    assert len(loaded_patterns["cluster_stats"]) == 4
+    assert "behavior_stats" in loaded_patterns
+    assert len(loaded_patterns["behavior_stats"]) == 4
 
 
 def test_validate_schedule_valid(smart_scheduler, sample_schedule, sample_patterns):

@@ -48,6 +48,8 @@ class DataLoader:
                 df["loss_rate"] = df["loss_rate"].clip(0, 1)
                 logger.debug("确保丢包率在0-1范围内")
 
+            # 添加原始文件路径列
+            df['file_path'] = str(file_path)
             logger.info(f"成功加载数据，共 {len(df)} 行")
             return df
         except Exception as e:
@@ -107,6 +109,7 @@ class DataLoader:
                 "timestamp": timestamps,
                 "delay": df["Delay1(ms)"].values,
                 "loss_rate": loss_rate,
+                "file_path": str(file_path),
             }
         )
 
@@ -139,6 +142,9 @@ class DataLoader:
                 logger.warning("截断后数据为空")
                 return df
 
+        # 保存原始文件路径
+        file_path = df['file_path'].iloc[0] if 'file_path' in df.columns else 'unknown'
+        
         # Resample to 100ms granularity
         df_resampled = (
             df.set_index("timestamp")
@@ -155,6 +161,9 @@ class DataLoader:
         # Ensure loss_rate is between 0 and 1
         df_resampled["loss_rate"] = df_resampled["loss_rate"].clip(0, 1)
         logger.debug("确保丢包率在0-1范围内")
+        
+        # 添加回文件路径列
+        df_resampled['file_path'] = file_path
 
         logger.info(f"预处理完成，共 {len(df_resampled)} 行数据")
         return df_resampled

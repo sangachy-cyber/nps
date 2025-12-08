@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 # 读取行为标签文件
 with open(
-    "/Users/xiaotuanzi/PycharmProjects/NPS/data/results/e2e_pipeline/patterns/behavior_labels_hdbscan.json",
+    "/Users/xiaotuanzi/PycharmProjects/NPS/data/results/e2e_pipeline/patterns/behavior_labels.json",
     "r",
 ) as f:
     data = json.load(f)

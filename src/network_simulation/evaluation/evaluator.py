@@ -10,12 +10,16 @@ import json
 from pathlib import Path
 from scipy.stats import entropy
 
+from scipy.stats import entropy
+
 from sklearn.decomposition import PCA
+from pathlib import Path
 from typing import Dict
 import matplotlib.pyplot as plt
 import seaborn as sns
 import markdown2
 from network_simulation.utils.logger import get_logger
+from config import DEFAULT_TRANSITION_MATRIX_HEATMAP, DEFAULT_TRANSITION_METRICS, DEFAULT_TYPICAL_SAMPLES, DEFAULT_BEHAVIOR_SAMPLE_PREFIX
 
 # 设置中文显示
 plt.rcParams["font.sans-serif"] = ["WenQuanYi Zen Hei", "SimHei", "Arial Unicode MS", "DejaVu Sans"]
@@ -434,78 +438,11 @@ class Evaluator:
                 "本报告展示了网络模拟参数生成方案的综合评估结果，"
             )
             f.write(
-                "包括聚类质量、行为转移质量和行为分离分析。\n\n"
+                "包括行为转移质量和行为分离分析。\n\n"
             )
 
-            # Clustering Quality Evaluation
-            f.write("## 1. 聚类质量评估\n\n")
-            f.write("### 评估指标\n")
-            f.write("| 指标 | 值 | 解释 |\n")
-            f.write("|------|-----|------|\n")
-
-            if "clustering_quality" in results:
-                clustering = results["clustering_quality"]
-                f.write(
-                    f"| 轮廓系数 | {clustering['silhouette_score']:.4f} | {'良好 (>0.5)' if clustering['silhouette_score'] > 0.5 else '需要改进 (<=0.5)'} |\n"
-                )
-                f.write(
-                    f"| Calinski-Harabasz指数 | {clustering['calinski_harabasz_score']:.2f} | 值越高，簇分离效果越好 |\n"
-                )
-                f.write(
-                    f"| Davies-Bouldin指数 | {clustering['davies_bouldin_score']:.4f} | 值越低，聚类效果越好 |\n"
-                )
-                f.write(
-                    f"| 完整性得分 | {clustering['completeness_score']:.4f} | 值越高，完整性越好 |\n"
-                )
-                f.write(
-                    f"| 同质性得分 | {clustering['homogeneity_score']:.4f} | 值越高，同质性越好 |\n"
-                )
-                f.write(
-                    f"| V-测度得分 | {clustering['v_measure_score']:.4f} | 值越高，同质性和完整性的平衡越好 |\n"
-                )
-
-                if clustering["bic"] is not None:
-                    f.write(
-                        f"| BIC | {clustering['bic']:.2f} | 值越低，模型拟合效果越好 |\n"
-                    )
-                    f.write(
-                        f"| AIC | {clustering['aic']:.2f} | 值越低，模型拟合效果越好 |\n"
-                    )
-                    f.write(
-                        f"| 对数似然值 | {clustering['log_likelihood']:.4f} | 值越高，数据拟合效果越好 |\n"
-                    )
-
-                f.write(f"| 簇数量 | {clustering['num_clusters']} | |\n")
-            elif "metrics" in results:
-                # Handle case where results come from PatternIdentifier
-                metrics = results["metrics"]
-                f.write(
-                    f"| 轮廓系数 | {metrics['silhouette_score']:.4f} | {'良好 (>0.5)' if metrics['silhouette_score'] > 0.5 else '需要改进 (<=0.5)'} |\n"
-                )
-                f.write(
-                    f"| Calinski-Harabasz指数 | {metrics['calinski_harabasz_score']:.2f} | 值越高，簇分离效果越好 |\n"
-                )
-
-                if "bic" in metrics:
-                    f.write(
-                        f"| BIC | {metrics['bic']:.2f} | 值越低，模型拟合效果越好 |\n"
-                    )
-                    f.write(
-                        f"| AIC | {metrics['aic']:.2f} | 值越低，模型拟合效果越好 |\n"
-                    )
-                    f.write(
-                        f"| 对数似然值 | {metrics['log_likelihood']:.4f} | 值越高，数据拟合效果越好 |\n"
-                    )
-
-                f.write(f"| 簇数量 | {metrics['num_clusters']} | |\n")
-
-            f.write("\n### 可视化\n")
-            f.write("- **聚类指标**: `clustering_metrics.png`\n")
-            f.write("- **PCA散点图**: `pca_scatter.png`\n")
-            f.write("- **PCA方差解释率**: `pca_variance.png`\n\n")
-
             # Behavior Transition Quality Evaluation
-            f.write("## 2. 行为转移质量评估\n\n")
+            f.write("## 1. 行为转移质量评估\n\n")
             f.write("### 评估指标\n")
             f.write("| 指标 | 值 | 解释 |\n")
             f.write("|------|-----|------|\n")
@@ -539,11 +476,11 @@ class Evaluator:
 
             f.write("\n### 可视化\n")
             f.write("- **交互式转移图**: `interactive_transition_graph.html`\n")
-            f.write("- **转移矩阵热力图**: `transition_matrix_heatmap.png`\n")
-            f.write("- **转移指标**: `transition_metrics.png`\n\n")
+            f.write("- **转移矩阵热力图**: `{}`\n".format(DEFAULT_TRANSITION_MATRIX_HEATMAP))
+            f.write("- **转移指标**: `{}`\n\n".format(DEFAULT_TRANSITION_METRICS))
 
             # Behavior Separation Evaluation
-            f.write("## 3. 行为分离评估\n\n")
+            f.write("## 2. 行为分离评估\n\n")
 
             if "behavior_separation" in results:
                 separation = results["behavior_separation"]
@@ -593,35 +530,35 @@ class Evaluator:
                         f"| {behavior_id} | {stats['count']} | {percentage:.2f}% |\n"
                     )
 
+                # 获取实际的特征数量
+                first_behavior = list(separation["behavior_stats"].values())[0]
+                actual_feature_count = len(first_behavior["mean"])
+                
                 # Mean Values per Feature
                 f.write("\n#### 特征均值\n")
-                f.write(
-                    "| 行为 | 时延标准差 | 丢包突发比例 | 突发持续时间 | 突发强度 | 时延趋势 | 时延5阶自相关 |\n"
-                )
-                f.write(
-                    "|------|-----------|------------|------------|--------|---------|------------|\n"
-                )
+                # 动态生成表头，根据实际特征数量
+                feature_names = ["时延标准差", "丢包突发比例", "突发持续时间", "突发强度", "时延趋势", "时延5阶自相关"]
+                header_line = "| 行为 | " + " | ".join(feature_names[:actual_feature_count]) + " |\n"
+                f.write(header_line)
+                separator_line = "|------| " + " | ".join(["-----------" for _ in range(actual_feature_count)]) + " |\n"
+                f.write(separator_line)
 
                 for behavior_id, stats in separation["behavior_stats"].items():
                     mean = stats["mean"]
-                    f.write(
-                        f"| {behavior_id} | {mean[0]:.4f} | {mean[1]:.4f} | {mean[2]:.4f} | {mean[3]:.4f} | {mean[4]:.4f} | {mean[5]:.4f} |\n"
-                    )
+                    # 只显示实际数量的特征
+                    mean_values = [f"{val:.4f}" for val in mean[:actual_feature_count]]
+                    f.write(f"| {behavior_id} | {' | '.join(mean_values)} |\n")
 
                 # Standard Deviation Values per Feature
                 f.write("\n#### 特征标准差\n")
-                f.write(
-                    "| 行为 | 时延标准差 | 丢包突发比例 | 突发持续时间 | 突发强度 | 时延趋势 | 时延5阶自相关 |\n"
-                )
-                f.write(
-                    "|------|-----------|------------|------------|--------|---------|------------|\n"
-                )
+                f.write(header_line)
+                f.write(separator_line)
 
                 for behavior_id, stats in separation["behavior_stats"].items():
                     std = stats["std"]
-                    f.write(
-                        f"| {behavior_id} | {std[0]:.4f} | {std[1]:.4f} | {std[2]:.4f} | {std[3]:.4f} | {std[4]:.4f} | {std[5]:.4f} |\n"
-                    )
+                    # 只显示实际数量的特征
+                    std_values = [f"{val:.4f}" for val in std[:actual_feature_count]]
+                    f.write(f"| {behavior_id} | {' | '.join(std_values)} |\n")
 
                 # Feature Importance by Behavior
                 f.write("\n#### 行为特征重要性\n")
@@ -644,7 +581,7 @@ class Evaluator:
                             stats["mean"][i]
                             for stats in separation["behavior_stats"].values()
                         ]
-                        for i in range(6)
+                        for i in range(actual_feature_count)
                     ]
                 )
 
@@ -657,7 +594,7 @@ class Evaluator:
 
                 # Rank features by importance
                 ranked_features = sorted(
-                    zip(feature_names, feature_cv), key=lambda x: x[1], reverse=True
+                    zip(feature_names[:actual_feature_count], feature_cv), key=lambda x: x[1], reverse=True
                 )
 
                 for i, (feature_name, cv) in enumerate(ranked_features[:3], 1):
@@ -700,54 +637,29 @@ class Evaluator:
                         f.write("\n")
 
             f.write("\n### 可视化\n")
-            f.write("- **特征分布图**: `feature_distributions.png`\n")
-            f.write("- **特征相关性热力图**: `feature_correlation.png`\n")
-            f.write("- **PCA散点图**: `pca_scatter.png`\n")
-            f.write("- **PCA方差解释率**: `pca_variance.png`\n\n")
+            f.write("- **特征分布图**: ![特征分布图](feature_distributions.png)\n")
+            f.write("- **特征相关性热力图**: ![特征相关性热力图](feature_correlation.png)\n")
+            f.write("- **转移矩阵热力图**: ![转移矩阵热力图](transition_matrix_heatmap.png)\n\n")
 
             # Behavior Samples
-            f.write("## 4. 行为样本\n\n")
+            f.write("## 3. 行为样本\n\n")
             f.write("### 典型样本\n")
-            f.write("- **典型样本**: `typical_samples.png`\n\n")
+            f.write("- **典型样本**: `{}`\n\n".format(DEFAULT_TYPICAL_SAMPLES))
 
             f.write("### 随机样本\n")
             f.write("每个行为类别的随机样本：\n")
-            f.write("- 行为 0: `behavior_0_sample_*.png`\n")
-            f.write("- 行为 1: `behavior_1_sample_*.png`\n")
-            f.write("- 行为 2: `behavior_2_sample_*.png`\n")
-            f.write("- 行为 3: `behavior_3_sample_*.png`\n")
-            f.write("- 行为 4: `behavior_4_sample_*.png`\n")
-            f.write("- 行为 5: `behavior_5_sample_*.png`\n")
-            f.write("- 行为 6: `behavior_6_sample_*.png`\n")
-            f.write("- 行为 7: `behavior_7_sample_*.png`\n\n")
+            for i in range(8):
+                f.write("- 行为 {}: `{}_sample_*.png`\n".format(i, DEFAULT_BEHAVIOR_SAMPLE_PREFIX + str(i)))
+            f.write("\n")
 
             # Conclusion and Recommendations
-            f.write("## 5. 结论和建议\n\n")
+            f.write("## 4. 结论和建议\n\n")
 
             # Executive Summary based on metrics
-            has_clustering = "clustering_quality" in results or "metrics" in results
             has_transition = "transition_quality" in results
             has_separation = "behavior_separation" in results
 
             f.write("### 关键发现\n")
-            if has_clustering:
-                if "clustering_quality" in results:
-                    clustering = results["clustering_quality"]
-                    f.write(
-                        f"- **发现的行为数量**: {clustering['num_clusters']}\n"
-                    )
-                    f.write(
-                        f"- **聚类质量**: {'良好' if clustering['silhouette_score'] > 0.5 else '需要改进'} (轮廓系数: {clustering['silhouette_score']:.4f})\n"
-                    )
-                else:
-                    metrics = results["metrics"]
-                    f.write(
-                        f"- **发现的行为数量**: {metrics['num_clusters']}\n"
-                    )
-                    f.write(
-                        f"- **聚类质量**: {'良好' if metrics['silhouette_score'] > 0.5 else '需要改进'} (轮廓系数: {metrics['silhouette_score']:.4f})\n"
-                    )
-
             if has_transition:
                 transition = results["transition_quality"]
                 f.write(
@@ -764,32 +676,7 @@ class Evaluator:
                 )
 
             f.write("\n### 建议\n")
-            f.write("1. **改进聚类质量**: ")
-            if has_clustering:
-                if "clustering_quality" in results:
-                    if results["clustering_quality"]["silhouette_score"] <= 0.5:
-                        f.write(
-                            "考虑调整簇的数量或尝试不同的聚类算法（例如，使用不同参数的HDBSCAN）。\n"
-                        )
-                    else:
-                        f.write(
-                            "聚类质量良好，但可以通过调整算法参数进一步改进。\n"
-                        )
-                else:
-                    if results["metrics"]["silhouette_score"] <= 0.5:
-                        f.write(
-                            "考虑调整簇的数量或尝试不同的聚类算法（例如，使用不同参数的HDBSCAN）。\n"
-                        )
-                    else:
-                        f.write(
-                            "聚类质量良好，但可以通过调整算法参数进一步改进。\n"
-                        )
-            else:
-                f.write(
-                    "执行聚类质量评估以确定需要改进的领域。\n"
-                )
-
-            f.write("2. **分析行为转移**: ")
+            f.write("1. **分析行为转移**: ")
             if has_transition:
                 if results["transition_quality"]["average_transition_entropy"] > 1.0:
                     f.write(
@@ -804,17 +691,17 @@ class Evaluator:
                     "执行行为转移分析，了解行为如何随时间演变。\n"
                 )
 
-            f.write("3. **优化特征选择**: ")
+            f.write("2. **优化特征选择**: ")
             f.write(
-                "考虑基于特征的相关性和重要性添加或移除特征，以改进聚类结果。\n"
+                "考虑基于特征的相关性和重要性添加或移除特征，以改进结果。\n"
             )
 
-            f.write("4. **与真实数据验证**: ")
+            f.write("3. **与真实数据验证**: ")
             f.write(
                 "将生成的模拟参数与真实网络数据进行比较，确保真实性。\n"
             )
 
-            f.write("5. **迭代改进**: ")
+            f.write("4. **迭代改进**: ")
             f.write(
                 "使用评估结果迭代改进参数生成方案。\n\n"
             )
@@ -858,8 +745,6 @@ class Evaluator:
                 "- 行为样本: `typical_samples.png`, `behavior_*_sample_*.png`\n"
             )
 
-
-
     def generate_transition_plots(self, transition_matrix: np.ndarray, output_dir: Path) -> None:
         """Generate behavior transition visualization plots"""
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -872,7 +757,75 @@ class Evaluator:
         plt.ylabel('起始状态')
         plt.title('行为转移矩阵热力图')
         plt.tight_layout()
-        plt.savefig(output_dir / 'transition_matrix_heatmap.png', dpi=300, bbox_inches='tight')
+        plt.savefig(output_dir / DEFAULT_TRANSITION_MATRIX_HEATMAP, dpi=300, bbox_inches='tight')
+        plt.close()
+
+        # 转移指标可视化
+        logger.info("生成转移指标可视化")
+        num_states = transition_matrix.shape[0]
+        
+        # 计算转移指标
+        # 1. 出度分布（每个状态转移到其他状态的数量）
+        out_degree = np.sum(transition_matrix > 0, axis=1)
+        
+        # 2. 入度分布（每个状态被其他状态转移到的数量）
+        in_degree = np.sum(transition_matrix > 0, axis=0)
+        
+        # 3. 转移熵（每个状态的不确定性）
+        transition_entropy = np.zeros(num_states)
+        for i in range(num_states):
+            row = transition_matrix[i, :]
+            row = row[row > 0]  # 只考虑非零概率
+            if len(row) > 0:
+                transition_entropy[i] = -np.sum(row * np.log2(row))
+        
+        # 4. 平均转移概率（每个状态的平均转移概率）
+        avg_transition_prob = np.mean(transition_matrix, axis=1)
+        
+        # 创建子图
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        
+        # 子图1: 出度分布
+        axes[0, 0].bar(range(num_states), out_degree)
+        axes[0, 0].set_xlabel('行为状态')
+        axes[0, 0].set_ylabel('出度')
+        axes[0, 0].set_title('每个行为状态的出度分布')
+        axes[0, 0].set_xticks(range(num_states))
+        axes[0, 0].set_xticklabels([f'行为 {i}' for i in range(num_states)], rotation=45)
+        axes[0, 0].grid(True, alpha=0.3)
+        
+        # 子图2: 入度分布
+        axes[0, 1].bar(range(num_states), in_degree)
+        axes[0, 1].set_xlabel('行为状态')
+        axes[0, 1].set_ylabel('入度')
+        axes[0, 1].set_title('每个行为状态的入度分布')
+        axes[0, 1].set_xticks(range(num_states))
+        axes[0, 1].set_xticklabels([f'行为 {i}' for i in range(num_states)], rotation=45)
+        axes[0, 1].grid(True, alpha=0.3)
+        
+        # 子图3: 转移熵分布
+        axes[1, 0].bar(range(num_states), transition_entropy)
+        axes[1, 0].set_xlabel('行为状态')
+        axes[1, 0].set_ylabel('转移熵')
+        axes[1, 0].set_title('每个行为状态的转移熵分布')
+        axes[1, 0].set_xticks(range(num_states))
+        axes[1, 0].set_xticklabels([f'行为 {i}' for i in range(num_states)], rotation=45)
+        axes[1, 0].grid(True, alpha=0.3)
+        
+        # 子图4: 平均转移概率分布
+        axes[1, 1].bar(range(num_states), avg_transition_prob)
+        axes[1, 1].set_xlabel('行为状态')
+        axes[1, 1].set_ylabel('平均转移概率')
+        axes[1, 1].set_title('每个行为状态的平均转移概率')
+        axes[1, 1].set_xticks(range(num_states))
+        axes[1, 1].set_xticklabels([f'行为 {i}' for i in range(num_states)], rotation=45)
+        axes[1, 1].grid(True, alpha=0.3)
+        
+        # 调整布局
+        plt.suptitle('行为转移指标', fontsize=16)
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.92)
+        plt.savefig(output_dir / DEFAULT_TRANSITION_METRICS, dpi=300, bbox_inches='tight')
         plt.close()
 
         logger.info("转移可视化图表生成完成")
@@ -998,5 +951,3 @@ class Evaluator:
             f.write(full_html)
         
         logger.info(f"已生成HTML报告: {output_path}")
-
-

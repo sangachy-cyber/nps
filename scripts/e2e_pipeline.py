@@ -20,11 +20,8 @@ from step1_1_process_raw import process_raw_data as process_raw_data_func
 from step1_2_extract_features import extract_features as extract_features_func
 from step1_3_discover_patterns import discover_patterns as discover_patterns_func
 from step1_4_evaluate_patterns import evaluate_patterns as evaluate_patterns_func
-from step2_0_preprocess_data import preprocess_data as preprocess_data_func
-from step2_1_train_model import train_model as train_model_func
-from step2_2_generate_samples import generate_samples as generate_samples_func
-from step2_3_visualize_results import visualize_results as visualize_results_func
-from step2_4_evaluate_generation import main as evaluate_generation_main
+
+# 只导入step1需要的模块，避免step2的语法错误
 
 # 初始化日志记录器
 logger = get_logger(__name__)

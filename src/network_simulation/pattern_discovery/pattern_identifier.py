@@ -7,7 +7,6 @@
 import pandas as pd
 import numpy as np
 import json
-import pickle
 from pathlib import Path
 from typing import Dict, List
 
@@ -117,23 +116,44 @@ class PatternIdentifier:
                 # 计算窗口内的统计信息
                 delay_mean = np.mean(delays)
                 delay_std = np.std(delays)
+                delay_min = np.min(delays)
+                delay_max = np.max(delays)
                 loss_mean = np.mean(loss_rates)
                 loss_std = np.std(loss_rates)
+                loss_max = np.max(loss_rates)
                 
-                # 检测High Delay No Loss (放宽条件)
+                # 检测行为 4: 高延迟无丢包 (放宽条件)
                 # delay_mean > 500ms且loss_mean < 0.02
                 if delay_mean > 500 and loss_mean < 0.02:
                     labels[i] = 4
                     continue
                 
-                # 检测Instant Spike (调整阈值)
+                # 检测行为 5: 持续高丢包
+                # loss_mean > 0.5且loss_std < 0.2
+                if loss_mean > 0.5 and loss_std < 0.2:
+                    labels[i] = 5
+                    continue
+                
+                # 检测行为 6: 频繁波动
+                # delay_std > 300且loss_std > 0.3
+                if delay_std > 300 and loss_std > 0.3:
+                    labels[i] = 6
+                    continue
+                
+                # 检测行为 7: 低延迟高丢包
+                # delay_mean < 100ms且loss_mean > 0.3
+                if delay_mean < 100 and loss_mean > 0.3:
+                    labels[i] = 7
+                    continue
+                
+                # 检测行为 3: 瞬时峰值 (调整阈值)
                 # ≤5个点满足：loss ≥ 0.8或delay ≥ 800ms
                 instant_spike_count = np.sum((delays >= 800) | (loss_rates >= 0.8))
                 if instant_spike_count > 0 and instant_spike_count <= 5:
                     labels[i] = 3
                     continue
                 
-                # 检测Strong Burst（持续拥塞，使用原始数据计算）
+                # 检测行为 2: Strong Burst（持续拥塞，使用原始数据计算）
                 # 计算连续拥塞点数量：delay ≥ 400ms且loss ≥ 0.25
                 congestion_run = 0
                 max_congestion_run = 0
@@ -148,7 +168,7 @@ class PatternIdentifier:
                     labels[i] = 2
                     continue
                 
-                # 检测Weak Burst (调整条件，增加更多判定依据)
+                # 检测行为 1: Weak Burst (调整条件，增加更多判定依据)
                 # 条件1: loss_mean ∈ [0.05, 0.5) 或
                 # 条件2: ramp_up > 80ms 或
                 # 条件3: loss_std > 0.2 或
@@ -187,20 +207,34 @@ class PatternIdentifier:
                     labels[i] = 1
                     continue
                 
-                # 默认为Stable
+                # 默认行为 0: Stable
                 labels[i] = 0
             else:
                 # 如果没有原始数据，只使用可用的特征进行判定
-                # 检测Strong Burst（如果有相关特征）
-                has_congestion_feature = 'feat_max_congestion_run' in available_features
-                if has_congestion_feature and row['feat_max_congestion_run'] >= 15:
+                # 检测行为 5: 持续高丢包
+                if 'feat_loss_mean' in available_features and row['feat_loss_mean'] > 0.5:
+                    labels[i] = 5
+                # 检测行为 6: 频繁波动
+                elif ('feat_delay_std' in available_features and row['feat_delay_std'] > 3.0) and \
+                     ('feat_loss_std' in available_features and row['feat_loss_std'] > 0.3):
+                    labels[i] = 6
+                # 检测行为 7: 低延迟高丢包
+                elif ('feat_delay_mean' in available_features and row['feat_delay_mean'] < 0.5) and \
+                     ('feat_loss_mean' in available_features and row['feat_loss_mean'] > 0.3):
+                    labels[i] = 7
+                # 检测行为 4: 高延迟无丢包
+                elif 'feat_delay_mean' in available_features and row['feat_delay_mean'] > 2.0 and \
+                     ('feat_loss_mean' in available_features and row['feat_loss_mean'] < 0.05):
+                    labels[i] = 4
+                # 检测行为 2: Strong Burst
+                elif 'feat_max_congestion_run' in available_features and row['feat_max_congestion_run'] >= 15:
                     labels[i] = 2
-                # 检测Weak Burst
-                elif 'feat_loss_nonzero_ratio' in available_features and row['feat_loss_nonzero_ratio'] > 0.3:
-                    labels[i] = 1
-                # 检测Instant Spike
+                # 检测行为 3: Instant Spike
                 elif 'feat_delay_std' in available_features and row['feat_delay_std'] > 2.0:
                     labels[i] = 3
+                # 检测行为 1: Weak Burst
+                elif 'feat_loss_nonzero_ratio' in available_features and row['feat_loss_nonzero_ratio'] > 0.3:
+                    labels[i] = 1
                 # 默认为Stable
                 else:
                     labels[i] = 0
@@ -227,6 +261,20 @@ class PatternIdentifier:
         total_elements = transition_matrix.size
         non_zero_elements = np.count_nonzero(transition_matrix)
         metrics["transition_sparsity"] = float(non_zero_elements / total_elements)
+
+        # Typical path analysis - Find most likely transition paths
+        # For each state, find the top 3 most likely next states
+        typical_paths = {}
+        num_states = transition_matrix.shape[0]
+        for i in range(num_states):
+            # Get top 3 most likely next states
+            top_indices = np.argsort(transition_matrix[i, :])[::-1][:3]
+            top_probs = transition_matrix[i, top_indices]
+            typical_paths[str(i)] = {
+                "next_states": [int(idx) for idx in top_indices],
+                "probabilities": [float(prob) for prob in top_probs]
+            }
+        metrics["typical_paths"] = typical_paths
 
         return metrics
 
@@ -300,6 +348,18 @@ class PatternIdentifier:
 
         method = results["method"]
 
+        # Save labels as npy file (方案要求的文件名)
+        if method == "rule":
+            labels_file = output_dir / "_labels_rule.npy"
+            np.save(labels_file, np.array(results["labels"]))
+            logger.info(f"保存标签为npy文件: {labels_file}")
+
+        # Save behavior statistics as separate JSON file (方案要求的文件名)
+        behavior_stats_file = output_dir / "behavior_statistics.json"
+        with open(behavior_stats_file, "w") as f:
+            json.dump(results["behavior_stats"], f, indent=2)
+        logger.info(f"保存行为统计信息: {behavior_stats_file}")
+
         # Save labels and metadata to JSON with method suffix
         with open(output_dir / f"behavior_labels_{method}.json", "w") as f:
             json.dump(
@@ -325,12 +385,14 @@ class PatternIdentifier:
                 indent=2,
             )
 
-        # Save valid loss values to metadata directory
+        # Save valid loss values to metadata directory (方案要求的目录位置)
         if valid_loss_values is not None:
             metadata_dir = output_dir / "metadata"
             metadata_dir.mkdir(parents=True, exist_ok=True)
-            with open(metadata_dir / "valid_loss_values.json", "w") as f:
+            valid_loss_file = metadata_dir / "valid_loss_values.json"
+            with open(valid_loss_file, "w") as f:
                 json.dump(valid_loss_values, f, indent=2)
+            logger.info(f"保存合法丢包值到metadata目录: {valid_loss_file}")
 
         # Save raw data segments by behavior category if raw data is available
         if "raw_data" in results and features_df is not None:

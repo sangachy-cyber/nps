@@ -77,7 +77,7 @@ class GenerateAndVisualize:
         self.feature_extractor = FeatureExtractor()
 
         # 初始化模式识别器
-        self.pattern_identifier = PatternIdentifier(method="hdbscan")
+        self.pattern_identifier = PatternIdentifier(method="rule")
 
         # 加载和处理数据
         self.df = None

@@ -101,6 +101,23 @@ def discover_patterns(
     # 创建输出目录结构
     metadata_dir = output_patterns_dir / "metadata"
     metadata_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 添加可视化
+    from network_simulation.visualization.visualizer import Visualizer
+    visualizer = Visualizer(output_patterns_dir)
+    
+    # 提取特征矩阵
+    feature_columns = [col for col in features_df.columns if col.startswith('feat_')]
+    X = features_df[feature_columns].values
+    
+    # 生成HTML报告和可视化
+    visualizer.generate_html_report(
+        patterns,
+        X,
+        feature_columns,
+        raw_data=processed_df,
+        features_df=features_df
+    )
 
     # 保存模式识别结果
     pattern_identifier.save(

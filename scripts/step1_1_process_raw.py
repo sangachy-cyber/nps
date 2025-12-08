@@ -115,6 +115,10 @@ def process_raw_data(input_file: Path, output_dir: Path):
 
     # 创建DataFrame并打印数据统计信息
     df = pd.DataFrame(data)
+    
+    # 添加原始文件路径列
+    df['file_path'] = str(input_file)
+    
     logger.info(f"处理后数据形状: {df.shape}")
     logger.info(f"时间范围: {df['timestamp'].min()} 到 {df['timestamp'].max()}")
     logger.info(f"时延范围: {df['delay'].min():.2f} 到 {df['delay'].max():.2f} ms")
