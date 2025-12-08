@@ -94,4 +94,3 @@ _docs/
 .jekyll-cache/
 
 # 忽略其他项目特定文件
-project_rules.md
