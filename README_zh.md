@@ -1,4 +1,4 @@
-# 网络仿真参数生成方案 v1.0
+# 网络仿真参数生成方案 v1.4
 
 [English Version](README.md)
 
@@ -8,121 +8,110 @@
 
 ## 功能特性
 
-- ✅ 生成单一网络行为（如高抖动、突发丢包）
+- ✅ 生成单一网络行为（如高抖动、突发丢包、持续拥塞）
 - ✅ 通过灵活的调度表生成任意混合行为序列
 - ✅ 确保统计特性、时序动态和协议表现的全面保真
-- ✅ 支持多种聚类方法（GMM、K-means、HDBSCAN）
-- ✅ 智能调度表验证和优化
+- ✅ 支持8类行为标签的规则事件检测
+- ✅ 基于条件扩散模型的高保真数据生成
 - ✅ 生成数据的三层评估体系
+- ✅ 完整的可视化体系（行为样本、时间轴、特征空间）
+- ✅ 支持上下行数据独立处理和生成
 
 ## 项目结构
 
 ```
-src/network_simulation/
-├── cli.py                    # 命令行界面
-├── data_processing/          # 原始数据处理
-│   └── data_loader.py
-├── feature_extraction/       # 网络数据特征提取
-│   └── feature_extractor.py
-├── pattern_discovery/        # 网络行为模式发现
-│   └── pattern_identifier.py
-├── condition_generation/     # 条件网络数据生成
-│   └── condition_generator.py
-├── smart_scheduling/         # 智能行为调度
-│   └── scheduler.py
-├── evaluation/               # 数据质量评估
-│   └── evaluator.py
-└── utils/                    # 工具函数
+NPS/
+├── data/             # 数据目录
+│   ├── raw/          # 原始数据
+│   └── reports/      # 报告和可视化结果
+├── docs/             # 文档目录
+├── scripts/          # 脚本文件
+├── src/              # 源代码
+│   └── network_simulation/  # 主包
+│       ├── condition_generation/  # 条件生成模型
+│       │   ├── condition_generator.py
+│       │   ├── constraint_injector.py
+│       │   ├── diffusion_model.py
+│       │   ├── normalization.py
+│       │   ├── sample_generator.py
+│       │   ├── training_data_preprocessor.py
+│       │   └── training_manager.py
+│       ├── data_processing/  # 数据处理
+│       │   ├── data_loader.py
+│       │   └── data_processor.py
+│       ├── evaluation/        # 评估模块
+│       │   └── evaluator.py
+│       ├── feature_extraction/  # 特征提取
+│       │   └── feature_extractor.py
+│       ├── pattern_discovery/  # 模式发现
+│       │   └── pattern_identifier.py
+│       ├── utils/             # 工具函数
+│       │   └── logger.py
+│       └── visualization/     # 可视化模块
+│           ├── base_visualizer.py
+│           ├── behavior_visualizer.py
+│           ├── feature_space_visualizer.py
+│           ├── report_generator.py
+│           ├── results_visualizer.py
+│           └── visualizer.py
+├── tests/            # 测试代码
+└── README_zh.md      # 中文说明文档
 ```
 
 ## 安装说明
 
 ```bash
 # 安装依赖
-poetry install
+uv install
 
-# 激活虚拟环境
-poetry shell
+# 运行端到端测试
+uv run python scripts/e2e_pipeline.py data/raw/20251207_223333_vXS-playback.txt
 ```
 
 ## 使用方法
 
-### 命令行参数
+### 快速开始
 
 ```bash
-# 处理原始数据
-python3 -m src.network_simulation.cli process-data --input <输入文件> --output <输出目录>
-
-# 提取特征
-python3 -m src.network_simulation.cli extract-features --input <输入文件1> <输入文件2> --output <输出目录>
-
-# 发现行为模式（默认使用 HDBSCAN 方法）
-python3 -m src.network_simulation.cli discover-patterns --input <特征文件> --raw-data <原始数据文件> --output <输出目录> --method <gmm|kmeans|hdbscan>
-
-# 生成网络仿真数据
-python3 -m src.network_simulation.cli generate-simulation --schedule <调度文件> --patterns <模式目录> --output <输出目录> --duration <秒数>
-
-# 评估生成的仿真数据
-python3 -m src.network_simulation.cli evaluate-simulation --input <仿真数据> --output <输出目录>
+# 运行完整的端到端流程
+uv run python scripts/e2e_pipeline.py data/raw/20251207_223333_vXS-playback.txt
 ```
 
-### 参数说明
+### 行为标签定义
 
-| 命令 | 参数 | 说明 | 默认值 |
-|------|------|------|--------|
-| discover-patterns | --input, -i | 输入特征文件 | 必需 |
-| discover-patterns | --raw-data, -r | 可选的原始数据文件，用于保存聚类后的原始数据段 | 无 |
-| discover-patterns | --output, -o | 输出目录 | data/results/patterns |
-| discover-patterns | --method, -m | 聚类方法（gmm/kmeans/hdbscan） | hdbscan |
-| extract-features | --input, -i | 输入处理后的数据文件（支持多个） | 必需 |
-| extract-features | --output, -o | 输出目录 | data/results/features |
-| process-data | --input, -i | 输入原始数据文件 | 必需 |
-| process-data | --output, -o | 输出目录 | data/processed |
-
-### 示例调度表
-
-```json
-{
-  "segments": [
-    {
-      "start_time": 0,
-      "end_time": 120,
-      "behavior_type": "stable"
-    },
-    {
-      "start_time": 120,
-      "end_time": 180,
-      "behavior_type": "burst_loss"
-    },
-    {
-      "start_time": 180,
-      "end_time": 300,
-      "behavior_type": "high_jitter"
-    },
-    {
-      "start_time": 300,
-      "end_time": 600,
-      "behavior_type": "recovery"
-    }
-  ]
-}
-```
+| 标签 | 名称 | 影响程度 |
+|------|------|----------|
+| 0 | STABLE | 最轻 |
+| 1 | WEAK_BURST | 较轻 |
+| 4 | HIGH_DELAY_NO_LOSS | 中等 |
+| 6 | FREQUENT_FLUCTUATION | 中等 |
+| 2 | STRONG_BURST | 较大 |
+| 5 | HIGH_LOSS_STEADY | 较大 |
+| 7 | LOW_DELAY_HIGH_LOSS | 严重 |
+| 3 | INSTANT_SPIKE | 最严重 |
+| -1 | INVALID | 无效 |
 
 ## 架构设计
 
-1. **行为模式发现**：从网络数据中提取特征，使用聚类算法发现行为模式
+1. **行为建模模块**：从网络数据中提取特征，使用规则事件检测引擎生成8类行为标签
 2. **智能调度接口**：允许用户定义行为调度表，进行合理性验证和优化
-3. **条件生成模型**：基于条件扩散模型、自回归生成和物理约束注入生成数据
+3. **条件生成模型**：基于条件扩散模型生成高保真网络数据
 4. **智能调度系统**：自动插入过渡段，确保行为对齐
 5. **三层评估体系**：从统计保真度、不可区分性和动态合理性三个维度评估生成数据
 
+## 可视化体系
+
+1. **行为样本图**：每类行为1~3个窗口，直观展示行为特征
+2. **标签时间轴图**：全局行为分布色块图，快速定位异常行为链
+3. **特征空间降维图**：t-SNE/UMAP/PCA降维，展示行为在特征空间的分布
+
 ## 技术栈
 
-- **核心框架**：PyTorch（支持 GPU/CPU/NPU）
+- **核心框架**：PyTorch（支持 GPU/CPU/MPS）
 - **数据处理**：pandas, numpy, scipy
-- **机器学习**：scikit-learn, hdbscan
+- **机器学习**：scikit-learn
 - **可视化**：matplotlib, seaborn
-- **项目管理**：Poetry
+- **项目管理**：uv
 
 ## 许可证
 

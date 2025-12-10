@@ -302,7 +302,8 @@ class TrainingManager:
             input_dim=4,  # 输入维度：[delay1, loss1, delay2, loss2]
             behavior_embed_dim=32,  # 行为嵌入维度
             T=1000,  # 扩散步数
-            normalization_params=normalization_params
+            normalization_params=normalization_params,
+            cond_dim=8  # 条件维度，与条件向量形状匹配
         )
         self.model.to(self.device)
 

@@ -457,11 +457,9 @@ class ConditionDiffusionModel(nn.Module):
         Returns:
             预测的噪声，shape (batch_size, seq_len, input_dim)
         """
-        # 如果 condition_proj 未初始化，动态创建
+        # 确保condition_proj已初始化
         if self.condition_proj is None:
-            self.condition_proj = nn.Linear(
-                condition_vector.shape[-1], self.behavior_embed_dim, device=x.device
-            )
+            raise ValueError("condition_proj未初始化，请确保在模型初始化时提供cond_dim参数")
 
         # 将条件向量映射到期望的行为嵌入维度
         behavior_embed = self.condition_proj(condition_vector)
@@ -485,11 +483,9 @@ class ConditionDiffusionModel(nn.Module):
         condition_vector = condition_vector.to(device)
         batch_size, seq_len, _ = condition_vector.shape
 
-        # 如果 condition_proj 未初始化，动态创建
+        # 确保condition_proj已初始化
         if self.condition_proj is None:
-            self.condition_proj = nn.Linear(
-                condition_vector.shape[-1], self.behavior_embed_dim, device=device
-            )
+            raise ValueError("condition_proj未初始化，请确保在模型初始化时提供cond_dim参数")
 
         # 将条件向量映射到期望的行为嵌入维度
         behavior_embed = self.condition_proj(condition_vector)
