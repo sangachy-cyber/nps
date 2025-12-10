@@ -6,13 +6,13 @@
 import pytest
 import pandas as pd
 import numpy as np
-from src.network_simulation.evaluation.visualizer import Visualizer
+from src.network_simulation.visualization.visualizer import Visualizer
 
 
 @pytest.fixture
-def visualizer():
+def visualizer(tmp_path):
     """初始化可视化器"""
-    return Visualizer()
+    return Visualizer(tmp_path)
 
 
 @pytest.fixture
@@ -93,21 +93,20 @@ def tmp_output_dir(tmp_path):
 def test_visualizer_initialization(visualizer):
     """测试可视化器初始化"""
     assert visualizer is not None
-    assert isinstance(visualizer.feature_columns, list)
-    assert len(visualizer.feature_columns) == 6
+    assert visualizer.base_visualizer is not None
+    assert visualizer.feature_visualizer is not None
+    assert visualizer.behavior_visualizer is not None
+    assert visualizer.report_generator is not None
 
 
-def test_visualize_evaluation_results(visualizer, sample_evaluation_results, tmp_output_dir):
+def test_visualize_evaluation_results(visualizer, sample_evaluation_results):
     """测试可视化评估结果"""
     # 可视化评估结果
-    visualizer.visualize_evaluation_results(sample_evaluation_results, tmp_output_dir)
+    result = visualizer.visualize_evaluation_results(sample_evaluation_results)
 
-    # 验证输出文件存在
-    transition_metrics_file = tmp_output_dir / "transition_metrics.png"
-
-    # 注意：由于测试环境可能不支持完整的可视化功能，我们只检查文件是否被创建
-    # 实际生成的文件可能是空的或不完整的，这在测试环境中是正常的
-    assert transition_metrics_file.exists()
+    # 验证返回结果是HTML片段
+    assert isinstance(result, str)
+    assert result.startswith("<h2>")
 
 
 
@@ -115,18 +114,23 @@ def test_visualize_evaluation_results(visualizer, sample_evaluation_results, tmp
 
 def test_visualize_feature_analysis(visualizer, sample_features_df, sample_labels, tmp_output_dir):
     """测试可视化特征分析"""
-    # 可视化特征分析
-    visualizer.visualize_feature_analysis(sample_features_df, sample_labels, tmp_output_dir)
+    # 使用generate_all_visualizations方法来生成特征分析可视化
+    X = sample_features_df.values
+    labels = sample_labels
+    transition_matrix = np.array([
+        [0.8, 0.1, 0.1],
+        [0.2, 0.6, 0.2],
+        [0.1, 0.3, 0.6]
+    ])
+    visualizer.generate_all_visualizations(X, labels, transition_matrix, tmp_output_dir)
 
     # 验证输出文件存在
     feature_distributions_file = tmp_output_dir / "feature_distributions.png"
     feature_correlation_file = tmp_output_dir / "feature_correlation.png"
-    feature_scatter_3d_html_file = tmp_output_dir / "feature_scatter_3d.html"
 
     # 注意：由于测试环境可能不支持完整的可视化功能，我们只检查文件是否被创建
     assert feature_distributions_file.exists()
     assert feature_correlation_file.exists()
-    assert feature_scatter_3d_html_file.exists()
 
 
 def test_visualize_behavior_transition(visualizer, sample_transition_matrix, tmp_output_dir):
@@ -182,14 +186,4 @@ def test_calculate_transition_sparsity(visualizer, sample_transition_matrix):
 
 
 
-def test_visualizer_feature_columns(visualizer):
-    """测试可视化器特征列"""
-    expected_columns = [
-        "feat_delay_std",
-        "feat_loss_burst_ratio",
-        "feat_burst_duration",
-        "feat_burst_intensity",
-        "feat_delay_trend",
-        "feat_delay_acf_5",
-    ]
-    assert visualizer.feature_columns == expected_columns
+

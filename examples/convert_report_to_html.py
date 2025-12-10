@@ -196,13 +196,13 @@ def convert_markdown_to_html(markdown_path: Path, html_path: Path) -> None:
         <header>
             <h1>网络仿真参数生成评估报告</h1>
         </header>
-        
+
         <main>
 """
 
     html_footer = """
         </main>
-        
+
         <footer class="footer">
             <p>生成时间: {}</p>
         </footer>

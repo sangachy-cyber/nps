@@ -66,7 +66,7 @@ def test_sample_generation(diffusion_model, sample_behavior_ids, constraint_inje
     """测试样本生成"""
     # 生成样本
     with torch.no_grad():
-        generated = diffusion_model.sample(sample_behavior_ids, sample_behavior_ids.device)
+        generated = diffusion_model.sample(sample_behavior_ids)
 
     # 验证生成结果的形状
     assert generated.shape == sample_behavior_ids.shape + (2,)
@@ -100,7 +100,7 @@ def test_sample_generation_shape(diffusion_model, device):
             behavior_ids = torch.randint(0, 3, (batch_size, seq_len), device=device)
 
             with torch.no_grad():
-                generated = diffusion_model.sample(behavior_ids, device)
+                generated = diffusion_model.sample(behavior_ids)
 
             assert generated.shape == (batch_size, seq_len, 2)
 

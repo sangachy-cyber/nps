@@ -125,7 +125,9 @@ def test_load_csv_data(data_loader, sample_csv_file, sample_csv_data):
     # 验证数据加载结果
     assert isinstance(df, pd.DataFrame)
     assert len(df) == len(sample_csv_data)
-    assert list(df.columns) == ["timestamp", "delay", "loss_rate"]
+    # 验证包含所需列
+    for col in ["timestamp", "delay", "loss_rate"]:
+        assert col in df.columns
     assert pd.api.types.is_datetime64_any_dtype(df["timestamp"])
     assert pd.api.types.is_float_dtype(df["delay"])
     assert pd.api.types.is_float_dtype(df["loss_rate"])
@@ -159,7 +161,9 @@ def test_load_holowan_data(data_loader, sample_holowan_file):
     # 验证数据加载结果
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 3  # 3行数据
-    assert list(df.columns) == ["timestamp", "delay", "loss_rate"]
+    # 验证包含所需列
+    for col in ["timestamp", "delay", "loss_rate"]:
+        assert col in df.columns
     assert pd.api.types.is_datetime64_any_dtype(df["timestamp"])
 
     # 验证丢包率处理
@@ -177,7 +181,9 @@ def test_preprocess(data_loader, sample_csv_data):
     # 验证预处理结果
     assert isinstance(df_processed, pd.DataFrame)
     assert len(df_processed) > 0
-    assert list(df_processed.columns) == ["timestamp", "delay", "loss_rate"]
+    # 验证包含所需列
+    for col in ["timestamp", "delay", "loss_rate"]:
+        assert col in df_processed.columns
 
     # 验证丢包率在0-1范围内
     assert df_processed["loss_rate"].min() >= 0

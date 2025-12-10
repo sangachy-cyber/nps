@@ -35,21 +35,21 @@ class DataLoader:
                 df = pd.read_csv(
                     file_path,
                     parse_dates=["timestamp"],
-                    dtype={"delay": float, "loss_rate": float},
                 )
 
-                # Ensure loss_rate is between 0 and 1
-                # If values are in percentage (greater than 1), convert to decimal
-                if df["loss_rate"].max() > 1:
-                    logger.debug("丢包率值大于1，转换为小数形式")
-                    df["loss_rate"] = df["loss_rate"] / 100.0
-
-                # Ensure loss_rate is between 0 and 1
-                df["loss_rate"] = df["loss_rate"].clip(0, 1)
-                logger.debug("确保丢包率在0-1范围内")
+                # 处理上下行数据
+                # 确保loss_rate1和loss_rate2在0-1范围内
+                for col in ["loss_rate1", "loss_rate2"]:
+                    # If values are in percentage (greater than 1), convert to decimal
+                    if df[col].max() > 1:
+                        logger.debug(f"{col}值大于1，转换为小数形式")
+                        df[col] = df[col] / 100.0
+                    # Ensure loss_rate is between 0 and 1
+                    df[col] = df[col].clip(0, 1)
+                logger.debug("确保上下行丢包率在0-1范围内")
 
             # 添加原始文件路径列
-            df['file_path'] = str(file_path)
+            df["file_path"] = str(file_path)
             logger.info(f"成功加载数据，共 {len(df)} 行")
             return df
         except Exception as e:
@@ -94,21 +94,29 @@ class DataLoader:
             start_time + pd.Timedelta(seconds=i * interval) for i in range(len(df))
         ]
 
-        # Create standard format dataframe with proper loss rate handling
+        # 处理上行数据
         # When Bandwidth1 is 0, it indicates 100% packet loss
-        # Ensure Loss1(%) is numeric
-        loss_rate = df["Loss1(%)"].astype(float).values / 100.0  # Convert percentage to decimal initially
+        loss_rate1 = df["Loss1(%)"].astype(float).values / 100.0  # Convert percentage to decimal
         bandwidth1 = df["Bandwidth1(Mbps)"].astype(float).values
+        loss_rate1[bandwidth1 == 0] = 1.0  # Set 100% loss when bandwidth is 0
+        logger.debug(f"处理了 {sum(bandwidth1 == 0)} 个上行带宽为0的100%丢包情况")
 
-        # Set loss_rate to 1.0 (100%) when Bandwidth1 is 0
-        loss_rate[bandwidth1 == 0] = 1.0
-        logger.debug(f"处理了 {sum(bandwidth1 == 0)} 个带宽为0的100%丢包情况")
+        # 处理下行数据
+        # When Bandwidth2 is 0, it indicates 100% packet loss
+        loss_rate2 = df["Loss2(%)"].astype(float).values / 100.0  # Convert percentage to decimal
+        bandwidth2 = df["Bandwidth2(Mbps)"].astype(float).values
+        loss_rate2[bandwidth2 == 0] = 1.0  # Set 100% loss when bandwidth is 0
+        logger.debug(f"处理了 {sum(bandwidth2 == 0)} 个下行带宽为0的100%丢包情况")
 
         result_df = pd.DataFrame(
             {
                 "timestamp": timestamps,
-                "delay": df["Delay1(ms)"].values,
-                "loss_rate": loss_rate,
+                "delay1": df["Delay1(ms)"].values,
+                "loss_rate1": loss_rate1,
+                "bandwidth1": bandwidth1,
+                "delay2": df["Delay2(ms)"].values,
+                "loss_rate2": loss_rate2,
+                "bandwidth2": bandwidth2,
                 "file_path": str(file_path),
             }
         )
@@ -129,9 +137,13 @@ class DataLoader:
         df = df.sort_values("timestamp").reset_index(drop=True)
         logger.debug("按时间戳排序数据")
 
-        # Check for delay > 2000ms and truncate data if found
-        # Find the index where delay first exceeds 2000ms
-        delay_exceed_idx = df[df["delay"] > 2000].index
+        # 检查上下行延迟是否超过2000ms
+        delay1_exceed_idx = df[df["delay1"] > 2000].index
+        delay2_exceed_idx = df[df["delay2"] > 2000].index
+
+        # 合并两个延迟超过阈值的索引
+        delay_exceed_idx = delay1_exceed_idx.union(delay2_exceed_idx)
+
         if not delay_exceed_idx.empty:
             # Get the first occurrence index
             cutoff_idx = delay_exceed_idx[0]
@@ -143,27 +155,40 @@ class DataLoader:
                 return df
 
         # 保存原始文件路径
-        file_path = df['file_path'].iloc[0] if 'file_path' in df.columns else 'unknown'
-        
+        file_path = df["file_path"].iloc[0] if "file_path" in df.columns else "unknown"
+
+        # 上下行数据的聚合函数
+        agg_func = {
+            "delay1": "mean",
+            "loss_rate1": "mean",
+            "bandwidth1": "mean",
+            "delay2": "mean",
+            "loss_rate2": "mean",
+            "bandwidth2": "mean",
+        }
+
         # Resample to 100ms granularity
         df_resampled = (
             df.set_index("timestamp")
             .resample(f"{int(self.time_granularity * 1000)}ms")
-            .agg({"delay": "mean", "loss_rate": "mean"})
+            .agg(agg_func)
             .reset_index()
         )
-        logger.debug(f"重采样到{self.time_granularity}秒粒度，得到 {len(df_resampled)} 行数据")
+        logger.debug(
+            f"重采样到{self.time_granularity}秒粒度，得到 {len(df_resampled)} 行数据"
+        )
 
-        # Fill missing values using linear interpolation
-        df_resampled = df_resampled.interpolate(method="linear")
-        logger.debug("使用线性插值填充缺失值")
+        # Fill missing values using time-appropriate interpolation
+        df_resampled = df_resampled.interpolate(method="pad")
+        logger.debug("使用前向填充插值填充缺失值")
 
         # Ensure loss_rate is between 0 and 1
-        df_resampled["loss_rate"] = df_resampled["loss_rate"].clip(0, 1)
-        logger.debug("确保丢包率在0-1范围内")
-        
+        df_resampled["loss_rate1"] = df_resampled["loss_rate1"].clip(0, 1)
+        df_resampled["loss_rate2"] = df_resampled["loss_rate2"].clip(0, 1)
+        logger.debug("确保上下行丢包率在0-1范围内")
+
         # 添加回文件路径列
-        df_resampled['file_path'] = file_path
+        df_resampled["file_path"] = file_path
 
         logger.info(f"预处理完成，共 {len(df_resampled)} 行数据")
         return df_resampled

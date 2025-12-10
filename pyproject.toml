@@ -38,8 +38,13 @@ build-backend = "setuptools.build_meta"
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "C90"]
+select = ["E", "F", "W", "C90", "ARG"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/e2e_pipeline.py" = ["C901"]
+"src/network_simulation/condition_generation/training_data_preprocessor.py" = ["C901"]
+"src/network_simulation/pattern_discovery/pattern_identifier.py" = ["C901"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

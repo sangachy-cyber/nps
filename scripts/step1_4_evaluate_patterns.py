@@ -40,10 +40,60 @@ def load_behavior_data(patterns_dir: Path):
     Returns:
         tuple: (行为标签数据, 转移矩阵数据)
     """
-    # 动态检测可用的行为标签文件
+    # 尝试加载新格式的上下行分离的标签文件
+    # 首先查找.npy格式的标签文件
+    npy_label_files = list(patterns_dir.glob("labels_*.npy"))
+    if npy_label_files:
+        logger.info(f"找到 {len(npy_label_files)} 个.npy格式的标签文件")
+
+        # 优先使用rule方法的文件
+        up_label_files = [f for f in npy_label_files if "rule" in f.name and "up" in f.name]
+        down_label_files = [f for f in npy_label_files if "rule" in f.name and "down" in f.name]
+
+        if up_label_files and down_label_files:
+            # 使用上下行标签文件
+            method = "rule"
+
+            # 加载上行标签
+            labels_up = np.load(up_label_files[0])
+            labels_down = np.load(down_label_files[0])
+
+            # 加载对应的转移矩阵文件
+            up_transition_file = patterns_dir / f"behavior_transition_graph_{method}_up.json"
+            down_transition_file = patterns_dir / f"behavior_transition_graph_{method}_down.json"
+
+            if not up_transition_file.exists() or not down_transition_file.exists():
+                logger.error(f"未找到转移矩阵文件: {up_transition_file} 或 {down_transition_file}")
+                sys.exit(1)
+
+            logger.info(f"使用上行标签文件: {up_label_files[0]}")
+            logger.info(f"使用下行标签文件: {down_label_files[0]}")
+            logger.info(f"使用上行转移矩阵文件: {up_transition_file}")
+            logger.info(f"使用下行转移矩阵文件: {down_transition_file}")
+
+            with open(up_transition_file, "r") as f:
+                up_transition_data = json.load(f)
+
+            # 只加载上行转移矩阵，下行转移矩阵暂不使用
+            # with open(down_transition_file, "r") as f:
+            #     down_transition_data = json.load(f)
+
+            # 合并上下行数据，返回上行数据作为主要评估数据
+            # 后续可以扩展为同时评估上下行数据
+            labels_data = {
+                "method": method,
+                "labels": labels_up,
+                "labels_up": labels_up,
+                "labels_down": labels_down
+            }
+
+            return labels_data, up_transition_data
+
+    # 如果没有找到.npy格式的标签文件，尝试加载旧格式的.json文件
     available_files = list(patterns_dir.glob("behavior_labels_*.json"))
     if not available_files:
         logger.error(f"在 {patterns_dir} 中未找到任何行为标签文件")
+        logger.error("支持的格式：labels_*.npy 或 behavior_labels_*.json")
         sys.exit(1)
 
     # 优先使用rule方法的文件，如果不存在则使用第一个找到的文件
@@ -55,7 +105,7 @@ def load_behavior_data(patterns_dir: Path):
     if not labels_file:
         labels_file = available_files[0]
 
-    logger.info(f"使用行为标签文件: {labels_file}")
+    logger.info(f"使用旧格式行为标签文件: {labels_file}")
     with open(labels_file, "r") as f:
         labels_data = json.load(f)
 
@@ -63,8 +113,14 @@ def load_behavior_data(patterns_dir: Path):
     method = labels_data["method"]
     transition_file = patterns_dir / f"behavior_transition_graph_{method}.json"
     if not transition_file.exists():
-        logger.error(f"未找到转移矩阵文件: {transition_file}")
-        sys.exit(1)
+        # 尝试查找包含方法名的转移矩阵文件
+        transition_files = list(patterns_dir.glob(f"behavior_transition_graph_{method}_*.json"))
+        if transition_files:
+            transition_file = transition_files[0]
+            logger.warning(f"使用找到的第一个转移矩阵文件: {transition_file}")
+        else:
+            logger.error(f"未找到转移矩阵文件: {transition_file}")
+            sys.exit(1)
 
     logger.info(f"使用转移矩阵文件: {transition_file}")
     with open(transition_file, "r") as f:
@@ -144,10 +200,6 @@ def evaluate_patterns(input_features_file: Path, input_patterns_dir: Path, outpu
         "behavior_separation": behavior_separation,
         "transition_matrix": transition_matrix.tolist()
     }
-
-    # 生成可视化图表
-    logger.info("生成可视化图表")
-    evaluator.generate_visualizations(X, labels, transition_matrix, output_eval_dir)
 
     # 保存评估结果
     logger.info("保存评估结果")

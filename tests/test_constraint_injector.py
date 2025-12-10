@@ -102,7 +102,7 @@ def test_constraint_injector_edge_cases(constraint_injector):
 
     # 单个元素
     single_delay = np.array([10.0])
-    single_loss_rate = np.array([0.01])
+    single_loss_rate = np.array([0.0])  # 使用合法的丢包率值
     validation = constraint_injector.validate_sequence(single_delay, single_loss_rate)
     assert validation["all_valid"]
 

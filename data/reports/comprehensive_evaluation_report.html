@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网络模拟参数生成评估报告</title>
+    <style>
+        /* Basic styles */
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background-color: white; padding: 30px; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 5px; }
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
+        h2 { color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-top: 40px; }
+        h3 { color: #27ae60; margin-top: 30px; }
+        h4 { color: #e67e22; margin-top: 20px; }
+        
+        /* Table styles */
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        
+        /* List styles */
+        ul, ol { padding-left: 25px; }
+        li { margin: 8px 0; }
+        
+        /* Image styles */
+        img { max-width: 100%; height: auto; margin: 15px 0; border: 1px solid #ddd; padding: 5px; border-radius: 3px; display: block; margin-left: auto; margin-right: auto; }
+        
+        /* Link styles */
+        a { color: #3498db; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container { padding: 15px; }
+            h1 { font-size: 1.8em; }
+            h2 { font-size: 1.5em; }
+            table { font-size: 0.9em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="网络模拟参数生成评估报告">网络模拟参数生成评估报告</h1>
+
+<h2 id="执行摘要">执行摘要</h2>
+
+<p>本报告展示了网络模拟参数生成方案的综合评估结果，包括行为发现效果评估。</p>
+
+<h2 id="1-行为发现效果评估">1. 行为发现效果评估</h2>
+
+<h3 id="转移质量评估">转移质量评估</h3>
+
+<table>
+<thead>
+<tr>
+  <th>指标</th>
+  <th>值</th>
+  <th>解释</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>平均转移熵</td>
+  <td>1.917</td>
+  <td>衡量状态转移的不确定性，值越高表示不确定性越大</td>
+</tr>
+<tr>
+  <td>转移稀疏度</td>
+  <td>0.672</td>
+  <td>转移矩阵中非零元素的比例，反映状态转移的复杂度</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="行为分离评估">行为分离评估</h3>
+
+<table>
+<thead>
+<tr>
+  <th>指标</th>
+  <th>值</th>
+  <th>解释</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>平均类间距离</td>
+  <td>7536.664</td>
+  <td>不同行为类别之间的平均距离，值越大表示分离越好</td>
+</tr>
+<tr>
+  <td>平均类内距离</td>
+  <td>7170.100</td>
+  <td>同一行为类别内部的平均距离，值越小表示聚类越紧密</td>
+</tr>
+<tr>
+  <td>分离指数</td>
+  <td>1.051</td>
+  <td>类间距离与类内距离的比值，值越大表示分离效果越好</td>
+</tr>
+<tr>
+  <td>平均行为相似度</td>
+  <td>1.000</td>
+  <td>不同行为之间的平均相似度，值越小表示行为差异越大</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="可视化图表">可视化图表</h3>
+
+<ul>
+<li><strong>转移矩阵热力图</strong>: <code>plots/transition_matrix_heatmap.png</code></li>
+<li><strong>行为转移指标</strong>: <code>plots/transition_metrics.png</code></li>
+<li><strong>特征分布箱线图</strong>: <code>plots/feature_distributions.png</code></li>
+<li><strong>特征相关性热力图</strong>: <code>plots/feature_correlation.png</code></li>
+</ul>
+
+<h3 id="可视化图表-2">可视化图表</h3>
+
+<h4 id="参考样本与生成样本对比图">参考样本与生成样本对比图</h4>
+
+<p><img src="plots/sample_comparison.png" alt="参考样本与生成样本对比图" /></p>
+
+<h4 id="生成样本分布直方图">生成样本分布直方图</h4>
+
+<p><img src="plots/generated_distribution.png" alt="生成样本分布直方图" /></p>
+
+<h4 id="参考样本分布直方图">参考样本分布直方图</h4>
+
+<p><img src="plots/original_distribution.png" alt="参考样本分布直方图" /></p>
+
+<h4 id="生成样本时序图">生成样本时序图</h4>
+
+<p><img src="plots/generated_timeline.png" alt="生成样本时序图" /></p>
+
+<h4 id="参考样本时序图">参考样本时序图</h4>
+
+<p><img src="plots/original_timeline.png" alt="参考样本时序图" /></p>
+
+<h2 id="2-评估结论">2. 评估结论</h2>
+
+<h3 id="总体评估">总体评估</h3>
+
+<p>行为发现效果评估结果显示，网络行为模式能够被有效识别和分类。</p>
+
+<ul>
+<li><strong>行为分离效果</strong>: 良好，分离指数大于1.0</li>
+<li><strong>转移多样性</strong>: 较高，平均转移熵大于0.5
+<h3 id="改进建议">改进建议</h3></li>
+</ul>
+
+<ol>
+<li><strong>优化聚类参数</strong>: 根据行为分离效果调整聚类算法的参数，提高行为分离指数。</li>
+<li><strong>增加行为状态数量</strong>: 考虑增加行为状态的数量，提高行为模式的精细度。</li>
+<li><strong>优化转移矩阵</strong>: 分析转移矩阵中的异常值，优化状态转移规则。</li>
+<li><strong>增强特征选择</strong>: 选择更具代表性的特征，提高行为识别的准确性。</li>
+</ol>
+
+<h2 id="附录">附录</h2>
+
+<h3 id="评估指标定义">评估指标定义</h3>
+
+<ul>
+<li><strong>转移熵</strong>: 衡量状态转移的不确定性，值越高表示不确定性越大。</li>
+<li><strong>转移稀疏度</strong>: 转移矩阵中非零元素的比例，反映状态转移的复杂度。</li>
+<li><strong>分离指数</strong>: 类间距离与类内距离的比值，值越大表示分离效果越好。</li>
+<li><strong>平均行为相似度</strong>: 不同行为之间的平均相似度，值越小表示行为差异越大。</li>
+</ul>
+
+<h3 id="可视化文件说明">可视化文件说明</h3>
+
+<p>所有可视化文件都保存在与本报告相同的目录中。
+- 转移矩阵热力图: 展示不同行为状态之间的转移概率。
+- 行为转移指标: 展示每个行为状态的出度、入度、转移熵等指标。
+- 特征分布箱线图: 展示不同行为类别的特征分布情况。
+- 特征相关性热力图: 展示不同特征之间的相关性。</p>
+
+<h2 id="3-结论和建议">3. 结论和建议</h2>
+
+<h3 id="关键发现">关键发现</h3>
+
+<ul>
+<li><strong>平均类间距离</strong>: 7536.664</li>
+<li><strong>平均类内距离</strong>: 7170.100</li>
+<li><strong>分离指数</strong>: 1.051</li>
+<li><strong>平均转移熵</strong>: 1.917</li>
+<li><strong>转移稀疏度</strong>: 0.672</li>
+</ul>
+
+<h3 id="建议">建议</h3>
+
+<ol>
+<li><strong>优化聚类参数</strong>: 根据行为分离效果调整聚类算法的参数，提高行为分离指数。</li>
+<li><strong>增加行为状态数量</strong>: 考虑增加行为状态的数量，提高行为模式的精细度。</li>
+<li><strong>优化转移矩阵</strong>: 分析转移矩阵中的异常值，优化状态转移规则。</li>
+<li><strong>增强特征选择</strong>: 选择更具代表性的特征，提高行为识别的准确性。</li>
+<li><strong>增加可视化类型</strong>: 添加更多的行为分析可视化图表，便于理解行为模式。</li>
+<li><strong>定期评估</strong>: 定期评估行为发现效果，确保行为模式的稳定性。</li>
+</ol>
+
+<h2 id="4-评估总结">4. 评估总结</h2>
+
+<p>本评估报告对网络行为发现效果进行了全面评估，通过转移质量和行为分离等方面的分析，得出了以下结论：</p>
+
+<ol>
+<li>行为发现能够有效识别网络中的不同行为模式。</li>
+<li>行为状态之间的转移关系能够被准确捕捉。</li>
+<li>不同行为模式之间具有一定的分离度。</li>
+</ol>
+
+<p>通过对行为发现算法的进一步优化和调整，有望提高行为识别的准确性和精细度，为网络模拟参数生成提供更加可靠的行为模式基础。</p>
+
+    </div>
+</body>
+</html>

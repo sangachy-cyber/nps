@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Evaluation Module
-Responsible for evaluating the quality of generated network simulation data
+评估模块
+负责评估生成的网络模拟数据的质量
 """
 
 import pandas as pd
@@ -10,19 +10,19 @@ import json
 from pathlib import Path
 from scipy.stats import entropy
 
-from scipy.stats import entropy
 
 from sklearn.decomposition import PCA
-from pathlib import Path
 from typing import Dict
 import matplotlib.pyplot as plt
-import seaborn as sns
-import markdown2
 from network_simulation.utils.logger import get_logger
-from config import DEFAULT_TRANSITION_MATRIX_HEATMAP, DEFAULT_TRANSITION_METRICS, DEFAULT_TYPICAL_SAMPLES, DEFAULT_BEHAVIOR_SAMPLE_PREFIX
 
 # 设置中文显示
-plt.rcParams["font.sans-serif"] = ["WenQuanYi Zen Hei", "SimHei", "Arial Unicode MS", "DejaVu Sans"]
+plt.rcParams["font.sans-serif"] = [
+    "WenQuanYi Zen Hei",
+    "SimHei",
+    "Arial Unicode MS",
+    "DejaVu Sans",
+]
 plt.rcParams["axes.unicode_minus"] = False
 
 # 初始化日志记录器
@@ -30,25 +30,68 @@ logger = get_logger(__name__)
 
 
 class Evaluator:
-    """Evaluates the quality of generated network simulation data"""
+    """评估器类
+
+    该类用于评估生成的网络模拟数据的质量，包括统计特征、分布一致性、时序特性等多个维度。
+    """
 
     def __init__(self):
         self.time_granularity = 0.1  # 100ms
-        self.feature_columns = [
-            "feat_delay_std",
-            "feat_loss_burst_ratio",
-            "feat_burst_duration",
-            "feat_burst_intensity",
-            "feat_delay_trend",
-            "feat_delay_acf_5",
-        ]
+        # 同时支持单通道和上下行特征
+        self.feature_columns = {
+            "single": [
+                "feat_delay_std",
+                "feat_loss_burst_ratio",
+                "feat_burst_duration",
+                "feat_burst_intensity",
+                "feat_delay_trend",
+                "feat_delay_acf_5",
+            ],
+            "up": [
+                "feat_delay1_std",
+                "feat_loss1_nonzero_ratio",
+                "feat_max_consec_loss1",
+                "feat_max_congestion_run1",
+                "feat_delay1_trend",
+                "feat_delay1_acf_5",
+            ],
+            "down": [
+                "feat_delay2_std",
+                "feat_loss2_nonzero_ratio",
+                "feat_max_consec_loss2",
+                "feat_max_congestion_run2",
+                "feat_delay2_trend",
+                "feat_delay2_acf_5",
+            ]
+        }
 
     def load_data(self, file_path: Path) -> pd.DataFrame:
-        """Load generated simulation data"""
+        """加载生成的模拟数据
+
+        从CSV文件中加载生成的网络模拟数据，并解析时间戳字段。
+
+        Args:
+            file_path: 模拟数据CSV文件路径
+
+        Returns:
+            包含模拟数据的DataFrame，其中timestamp字段已解析为日期时间类型
+        """
         return pd.read_csv(file_path, parse_dates=["timestamp"])
 
     def evaluate(self, df: pd.DataFrame) -> Dict:
-        """Evaluate the quality of generated network simulation data"""
+        """评估生成的网络模拟数据质量
+
+        该函数从多个维度评估生成的网络模拟数据质量，包括统计保真度、不可区分性和动态合理性。
+
+        Args:
+            df: 包含网络模拟数据的DataFrame，应包含时延、丢包率等字段
+
+        Returns:
+            包含各个维度评估结果的字典，包括：
+            - statistical_fidelity: 统计保真度评估结果
+            - indistinguishability: 不可区分性评估结果
+            - dynamic_rationality: 动态合理性评估结果
+        """
         logger.info(f"开始评估生成的网络模拟数据，共 {len(df)} 行")
         evaluation_results = {
             "statistical_fidelity": {},
@@ -77,10 +120,17 @@ class Evaluator:
         logger.info("评估完成")
         return evaluation_results
 
-
-
     def evaluate_transition_quality(self, transition_matrix: np.ndarray) -> Dict:
-        """Evaluate behavior transition quality"""
+        """评估行为转移质量
+
+        评估网络行为模式之间的转移质量，包括计算转移熵和转移稀疏度等指标。
+
+        Args:
+            transition_matrix: 行为转移矩阵
+
+        Returns:
+            包含转移质量评估结果的字典，包括平均转移熵、转移稀疏度等指标
+        """
         # Calculate average transition entropy
         transition_entropies = []
         for i in range(len(transition_matrix)):
@@ -104,7 +154,17 @@ class Evaluator:
         }
 
     def evaluate_behavior_separation(self, X: np.ndarray, labels: np.ndarray) -> Dict:
-        """Evaluate behavior separation"""
+        """评估行为分离质量
+
+        评估不同网络行为模式之间的分离质量，包括计算类内距离和类间距离等指标。
+
+        Args:
+            X: 特征向量数组
+            labels: 行为标签数组
+
+        Returns:
+            包含行为分离质量评估结果的字典，包括类内距离、类间距离等指标
+        """
         unique_labels = np.unique(labels)
 
         # Calculate mean and std for each behavior
@@ -130,7 +190,16 @@ class Evaluator:
         }
 
     def _calculate_behavior_similarity(self, behavior_stats: Dict) -> Dict:
-        """Calculate similarity between different behaviors"""
+        """计算行为相似性指标
+
+        计算不同网络行为模式之间的相似性指标，包括统计特征的相关性等。
+
+        Args:
+            behavior_stats: 包含各行为统计特征的字典
+
+        Returns:
+            包含行为相似性评估结果的字典
+        """
         behavior_ids = list(behavior_stats.keys())
         n_behaviors = len(behavior_ids)
 
@@ -169,7 +238,17 @@ class Evaluator:
         }
 
     def _calculate_separation_metrics(self, X: np.ndarray, labels: np.ndarray) -> Dict:
-        """Calculate behavior separation metrics"""
+        """计算行为分离指标
+
+        计算不同网络行为模式之间的分离指标，包括类内距离、类间距离、轮廓系数等。
+
+        Args:
+            X: 特征向量数组
+            labels: 行为标签数组
+
+        Returns:
+            包含行为分离指标的字典
+        """
         unique_labels = np.unique(labels)
         n_clusters = len(unique_labels)
 
@@ -215,7 +294,16 @@ class Evaluator:
         }
 
     def _evaluate_statistical_fidelity(self, df: pd.DataFrame) -> Dict:
-        """Evaluate statistical fidelity of generated data"""
+        """评估生成数据的统计保真度
+
+        评估生成数据与真实数据的统计特征一致性，包括均值、方差、分布等。
+
+        Args:
+            df: 包含生成数据的DataFrame
+
+        Returns:
+            包含统计保真度评估结果的字典
+        """
         # For now, we'll use internal statistical checks
         # Later, we'll compare with real data
 
@@ -250,7 +338,358 @@ class Evaluator:
 
         return results
 
-    def _evaluate_indistinguishability(self, df: pd.DataFrame) -> Dict:
+    def calculate_stats(self, df: pd.DataFrame, prefix: str) -> Dict:
+        """计算单个数据框的统计指标
+
+        Args:
+            df: 数据框
+            prefix: 结果键名的前缀
+
+        Returns:
+            包含统计指标的字典
+        """
+        from scipy import stats
+
+        stats_dict = {
+            f"{prefix}_mean": df["delay"].mean(),
+            f"{prefix}_std": df["delay"].std(),
+            f"{prefix}_min": df["delay"].min(),
+            f"{prefix}_max": df["delay"].max(),
+            f"{prefix}_median": df["delay"].median(),
+            f"{prefix}_skew": stats.skew(df["delay"]),
+            f"{prefix}_kurtosis": stats.kurtosis(df["delay"]),
+        }
+
+        # 丢包率统计
+        stats_dict[f"{prefix}_loss_mean"] = df["loss_rate"].mean()
+        stats_dict[f"{prefix}_loss_std"] = df["loss_rate"].std()
+        stats_dict[f"{prefix}_loss_unique"] = len(df["loss_rate"].unique())
+
+        return stats_dict
+
+    def evaluate_single_sample(self, original_file: Path, generated_file: Path, output_dir: Path) -> Dict:
+        """评估单组生成样本的质量
+
+        Args:
+            original_file: 原始样本文件路径
+            generated_file: 生成样本文件路径
+            output_dir: 输出目录路径
+
+        Returns:
+            包含评估结果的字典
+        """
+        from scipy import stats
+        import pandas as pd
+        import os
+
+        # 读取数据
+        original_df = pd.read_csv(original_file)
+        generated_df = pd.read_csv(generated_file)
+
+        # 计算原始数据和生成数据的统计指标
+        original_stats = self.calculate_stats(original_df, "original")
+        generated_stats = self.calculate_stats(generated_df, "generated")
+
+        # 合并统计结果
+        stats_df = pd.DataFrame([original_stats, generated_stats])
+
+        # 计算差异
+        stats_df["delay_mean_diff"] = abs(
+            stats_df["original_mean"] - stats_df["generated_mean"]
+        )
+        stats_df["delay_std_diff"] = abs(
+            stats_df["original_std"] - stats_df["generated_std"]
+        )
+        stats_df["loss_mean_diff"] = abs(
+            stats_df["original_loss_mean"] - stats_df["generated_loss_mean"]
+        )
+
+        # 生成评估报告
+        report = []
+        report.append("=" * 60)
+        report.append(f"生成数据质量评估报告 - {os.path.basename(generated_file)}")
+        report.append("=" * 60)
+        report.append("")
+
+        report.append("1. 时延统计对比:")
+        report.append(
+            f"   原始数据 - 平均值: {original_stats['original_mean']:.2f}, 标准差: {original_stats['original_std']:.2f}"
+        )
+        report.append(
+            f"   生成数据 - 平均值: {generated_stats['generated_mean']:.2f}, 标准差: {generated_stats['generated_std']:.2f}"
+        )
+        report.append(
+            f"   平均值差异: {abs(original_stats['original_mean'] - generated_stats['generated_mean']):.2f} ({abs(original_stats['original_mean'] - generated_stats['generated_mean']) / original_stats['original_mean'] * 100:.2f}%)"
+        )
+        report.append(
+            f"   标准差差异: {abs(original_stats['original_std'] - generated_stats['generated_std']):.2f} ({abs(original_stats['original_std'] - generated_stats['generated_std']) / original_stats['original_std'] * 100:.2f}%)"
+        )
+
+        report.append("")
+        report.append("2. 丢包率统计对比:")
+        report.append(
+            f"   原始数据 - 平均值: {original_stats['original_loss_mean']:.4f}, 标准差: {original_stats['original_loss_std']:.4f}"
+        )
+        report.append(
+            f"   生成数据 - 平均值: {generated_stats['generated_loss_mean']:.4f}, 标准差: {generated_stats['generated_loss_std']:.4f}"
+        )
+        report.append(f"   原始数据丢包率唯一值: {original_stats['original_loss_unique']}")
+        report.append(
+            f"   生成数据丢包率唯一值: {generated_stats['generated_loss_unique']}"
+        )
+
+        report.append("")
+        report.append("3. 分布相似性评估:")
+        # KS检验
+        delay_ks_stat, delay_ks_pvalue = stats.ks_2samp(
+            original_df["delay"], generated_df["delay"]
+        )
+        report.append(
+            f"   时延KS检验 - 统计量: {delay_ks_stat:.4f}, p值: {delay_ks_pvalue:.4f}"
+        )
+        if delay_ks_pvalue > 0.05:
+            report.append("   结论: 时延分布相似 (p > 0.05)")
+        else:
+            report.append("   结论: 时延分布存在显著差异 (p ≤ 0.05)")
+
+        # 生成数据有效性检查
+        report.append("")
+        report.append("4. 生成数据有效性检查:")
+        invalid_delay = (generated_df["delay"] < 0).sum()
+        invalid_loss = (
+            (generated_df["loss_rate"] < 0) | (generated_df["loss_rate"] > 1)
+        ).sum()
+        report.append(f"   无效时延值数量: {invalid_delay}")
+        report.append(f"   无效丢包率值数量: {invalid_loss}")
+        report.append(
+            f"   数据有效性: {'100%' if invalid_delay == 0 and invalid_loss == 0 else f'{(1 - (invalid_delay + invalid_loss) / len(generated_df)) * 100:.2f}%'}"
+        )
+
+        report.append("")
+        report.append("5. 生成数据多样性评估:")
+        # 计算生成数据的多样性指标
+        delay_range = generated_df["delay"].max() - generated_df["delay"].min()
+        loss_rate_values = sorted(generated_df["loss_rate"].unique())
+        report.append(f"   时延范围: {delay_range:.2f}")
+        report.append(f"   丢包率覆盖值: {loss_rate_values}")
+        report.append(f"   丢包率覆盖类别数: {len(loss_rate_values)}")
+
+        report.append("")
+        report.append("=" * 60)
+        report.append("评估完成!")
+        report.append("=" * 60)
+
+        # 记录评估报告
+        report_text = "\n".join(report)
+        logger.info(report_text)
+
+        # 保存评估报告
+        group_name = (
+            os.path.basename(generated_file).split(".")[0].split("_")[-3:]
+        )  # 获取group_1_behavior_1
+        group_dir_name = "_" + "_".join(group_name)
+        group_output_dir = output_dir / f"group{group_dir_name}"
+        group_output_dir.mkdir(parents=True, exist_ok=True)
+
+        report_file = group_output_dir / "evaluation_report.txt"
+        with open(report_file, "w") as f:
+            f.write(report_text)
+
+        return {
+            "group": group_name,
+            "original_stats": original_stats,
+            "generated_stats": generated_stats,
+            "delay_ks_stat": delay_ks_stat,
+            "delay_ks_pvalue": delay_ks_pvalue,
+            "invalid_delay": invalid_delay,
+            "invalid_loss": invalid_loss,
+            "generated_file": generated_file,
+        }
+
+    def generate_summary_report(self, results: list, output_dir: Path) -> None:
+        """生成所有样本的汇总评估报告
+
+        Args:
+            results: 评估结果列表
+            output_dir: 输出目录路径
+        """
+        import numpy as np
+        import pandas as pd
+        import os
+
+        report = []
+        report.append("=" * 60)
+        report.append("生成数据质量评估汇总报告")
+        report.append("=" * 60)
+        report.append("")
+
+        # 计算平均指标
+        if results:
+            avg_delay_mean_diff = np.mean(
+                [
+                    abs(
+                        r["generated_stats"]["generated_mean"]
+                        - r["original_stats"]["original_mean"]
+                    )
+                    for r in results
+                ]
+            )
+            avg_delay_std_diff = np.mean(
+                [
+                    abs(
+                        r["generated_stats"]["generated_std"]
+                        - r["original_stats"]["original_std"]
+                    )
+                    for r in results
+                ]
+            )
+            avg_loss_mean_diff = np.mean(
+                [
+                    abs(
+                        r["generated_stats"]["generated_loss_mean"]
+                        - r["original_stats"]["original_loss_mean"]
+                    )
+                    for r in results
+                ]
+            )
+            avg_ks_stat = np.mean([r["delay_ks_stat"] for r in results])
+            avg_ks_pvalue = np.mean([r["delay_ks_pvalue"] for r in results])
+
+            report.append("1. 平均指标")
+            report.append(f"   平均时延平均值差异: {avg_delay_mean_diff:.2f}")
+            report.append(f"   平均时延标准差差异: {avg_delay_std_diff:.2f}")
+            report.append(f"   平均丢包率平均值差异: {avg_loss_mean_diff:.4f}")
+            report.append(f"   平均KS检验统计量: {avg_ks_stat:.4f}")
+            report.append(f"   平均KS检验p值: {avg_ks_pvalue:.4f}")
+            report.append("")
+
+        report.append("2. 样本评估详情:")
+        for i, result in enumerate(results):
+            report.append(f"   样本组 {i + 1}:")
+            report.append(f"     文件名: {os.path.basename(result['generated_file'])}")
+            report.append(f"     主要行为类别: {result['group'][-1]}")
+            report.append(
+                f"     时延平均值差异: {abs(result['original_stats']['original_mean'] - result['generated_stats']['generated_mean']):.2f}"
+            )
+            report.append(
+                f"     丢包率平均值差异: {abs(result['original_stats']['original_loss_mean'] - result['generated_stats']['generated_loss_mean']):.4f}"
+            )
+            report.append(f"     KS检验p值: {result['delay_ks_pvalue']:.4f}")
+            # 计算数据有效性
+            generated_df = pd.read_csv(result["generated_file"])
+            total_samples = len(generated_df)
+            data_validity = (
+                1 - (result["invalid_delay"] + result["invalid_loss"]) / total_samples
+            ) * 100
+            report.append(f"     数据有效性: {data_validity:.2f}%")
+
+        report.append("")
+        report.append("=" * 60)
+        report.append("汇总评估完成!")
+        report.append("=" * 60)
+
+        # 保存汇总报告
+        summary_report_file = output_dir / "summary_report.txt"
+        with open(summary_report_file, "w") as f:
+            f.write("\n".join(report))
+        logger.info(f"汇总报告已保存到: {summary_report_file}")
+
+        # 生成综合评估报告
+        self._generate_comprehensive_report(results, output_dir)
+
+    def _generate_comprehensive_report(self, results: list, output_dir: Path) -> None:
+        """生成综合评估报告
+
+        Args:
+            results: 评估结果列表
+            output_dir: 输出目录路径
+        """
+        import numpy as np
+        import pandas as pd
+
+        # 生成综合评估报告所需的结果字典
+        comprehensive_results = {}
+
+        # 如果有结果，使用第一个结果的统计信息作为代表
+        if results:
+            first_result = results[0]
+
+            # 转换numpy类型为Python原生类型的辅助函数
+            def convert_numpy_types(obj):
+                if isinstance(obj, np.integer):
+                    return int(obj)
+                elif isinstance(obj, np.floating):
+                    return float(obj)
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, dict):
+                    return {key: convert_numpy_types(value) for key, value in obj.items()}
+                else:
+                    return obj
+
+            # 转换原始统计信息和生成统计信息
+            original_stats = convert_numpy_types(first_result["original_stats"])
+            generated_stats = convert_numpy_types(first_result["generated_stats"])
+
+            comprehensive_results["original_stats"] = original_stats
+            comprehensive_results["generated_stats"] = generated_stats
+            comprehensive_results["delay_ks_stat"] = float(first_result["delay_ks_stat"])
+            comprehensive_results["delay_ks_pvalue"] = float(first_result["delay_ks_pvalue"])
+            comprehensive_results["invalid_delay"] = int(first_result["invalid_delay"])
+            comprehensive_results["invalid_loss"] = int(first_result["invalid_loss"])
+            comprehensive_results["total_samples"] = int(len(pd.read_csv(first_result["generated_file"])))
+
+        # 调用save()方法，生成综合评估报告
+        self.save(comprehensive_results, output_dir)
+
+    def evaluate_batch_samples(self, input_generation_dir: Path, output_evaluation_dir: Path) -> None:
+        """批量评估生成样本的质量
+
+        Args:
+            input_generation_dir: 生成样本的目录路径
+            output_evaluation_dir: 评估结果的输出目录路径
+        """
+        import glob
+
+        # 确保输出目录存在
+        output_evaluation_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"确保输出目录存在: {output_evaluation_dir}")
+
+        # 查找所有原始样本和生成样本文件
+        original_files = sorted(
+            [Path(f) for f in glob.glob(str(input_generation_dir / "original_sample_6000*.csv"))]
+        )
+        generated_files = sorted(
+            [Path(f) for f in glob.glob(str(input_generation_dir / "generated_sample_6000*.csv"))]
+        )
+        logger.info(f"找到原始样本文件数: {len(original_files)}, 生成样本文件数: {len(generated_files)}")
+
+        if not original_files:
+            logger.error(f"错误: 在 {input_generation_dir} 中未找到原始样本文件")
+            return
+
+        if not generated_files:
+            logger.error(f"错误: 在 {input_generation_dir} 中未找到生成样本文件")
+            return
+
+        if len(original_files) != len(generated_files):
+            logger.warning(
+                f"警告: 原始样本文件数 ({len(original_files)}) 与生成样本文件数 ({len(generated_files)}) 不匹配"
+            )
+
+        # 评估所有样本对
+        all_results = []
+        for original_file, generated_file in zip(original_files, generated_files):
+            logger.info(f"开始评估样本对: {original_file.name} 和 {generated_file.name}")
+            result = self.evaluate_single_sample(
+                original_file, generated_file, output_evaluation_dir
+            )
+            all_results.append(result)
+
+        # 生成汇总报告
+        self.generate_summary_report(all_results, output_evaluation_dir)
+
+    def _evaluate_indistinguishability(self, _df: pd.DataFrame) -> Dict:
         """Evaluate if generated data is indistinguishable from real data"""
         # For now, we'll use placeholder values
         # Later, we'll train a discriminator model
@@ -357,597 +796,28 @@ class Evaluator:
         with open(json_path, "w") as f:
             json.dump(results, f, indent=2)
         logger.info(f"已保存评估结果到JSON文件: {json_path}")
-
-        # Save summary report only if it has the expected keys
-        if "statistical_fidelity" in results:
-            summary_path = output_dir / "evaluation_summary.txt"
-            self._generate_summary_report(results, summary_path)
-            logger.info(f"已生成评估摘要报告: {summary_path}")
-
-        # Save comprehensive Markdown report
-        markdown_path = output_dir / "comprehensive_evaluation_report.md"
-        self.generate_comprehensive_report(results, markdown_path)
-        logger.info(f"已生成综合评估报告(Markdown): {markdown_path}")
-
-        # Save comprehensive HTML report
-        html_path = output_dir / "comprehensive_evaluation_report.html"
-        self.generate_html_report(results, html_path)
-        logger.info(f"已生成综合评估报告(HTML): {html_path}")
         logger.info("所有评估结果已保存完成")
 
-    def _generate_summary_report(self, results: Dict, output_path: Path) -> None:
-        """生成易读的摘要报告"""
-        with open(output_path, "w") as f:
-            f.write("网络模拟数据评估报告\n")
-            f.write("=" * 50 + "\n\n")
+    def save_with_visualization(self, results: Dict, output_dir: Path, X: np.ndarray = None, labels: np.ndarray = None, transition_matrix: np.ndarray = None) -> None:
+        """Save evaluation results with visualization"""
+        # Save evaluation results first
+        self.save(results, output_dir)
 
-            # 统计保真度
-            f.write("1. 统计保真度 (L1)\n")
-            f.write("-" * 30 + "\n")
-            stats = results["statistical_fidelity"]
-            f.write(f"时延均值: {stats['delay_mean']:.2f} ms\n")
-            f.write(f"时延标准差: {stats['delay_std']:.2f} ms\n")
-            f.write(f"丢包率均值: {stats['loss_rate_mean']:.4f}\n")
-            f.write(f"丢包率标准差: {stats['loss_rate_std']:.4f}\n")
-            f.write(
-                f"丢包率范围: [{stats['loss_rate_range']['min']:.4f}, {stats['loss_rate_range']['max']:.4f}]\n\n"
-            )
+        # Import visualization module here to avoid circular dependency
+        from network_simulation.visualization.visualizer import Visualizer
 
-            # 不可区分性
-            f.write("2. 不可区分性 (L2)\n")
-            f.write("-" * 30 + "\n")
-            indist = results["indistinguishability"]
-            f.write(
-                f"判别器AUC值: {indist['discriminator_auc']:.4f} (0.5 = 完美不可区分)\n"
-            )
-            f.write(f"TSTR保留率: {indist['tstr_keep_rate']:.4f}\n\n")
+        # Initialize visualizer
+        visualizer = Visualizer(output_dir)
 
-            # 动态合理性
-            f.write("3. 动态合理性 (L3)\n")
-            f.write("-" * 30 + "\n")
-            dynamic = results["dynamic_rationality"]
-            f.write(f"时延5阶自相关: {dynamic['delay_acf_5']:.4f}\n")
-            f.write(f"突发数量: {dynamic['burst_statistics']['num_bursts']}\n")
-            f.write(
-                f"平均突发持续时间: {dynamic['burst_statistics']['avg_burst_duration']:.2f} 秒\n"
-            )
-            f.write(
-                f"突发频率: {dynamic['burst_statistics']['burst_frequency']:.4f} 突发/秒\n"
-            )
-            f.write(
-                f"行为对齐准确率: {dynamic['behavior_alignment_accuracy']:.4f}\n\n"
-            )
+        # Generate all visualizations if required data is provided
+        if X is not None and labels is not None and transition_matrix is not None:
+            visualizer.generate_all_visualizations(X, labels, transition_matrix, output_dir / "plots")
 
-            # 总体评估
-            f.write("总体评估\n")
-            f.write("-" * 30 + "\n")
-            f.write(
-                "生成的网络模拟数据显示出良好的质量，具有合理的统计特性。\n"
-            )
-            f.write(
-                "通过与真实网络数据进行比较和优化生成模型，可以进一步改进。\n"
-            )
+        # Generate evaluation report
+        visualizer.generate_evaluation_report(results, output_dir)
 
-    def generate_comprehensive_report(self, results: Dict, output_path: Path) -> None:
-        """Generate a comprehensive Markdown report of evaluation results"""
-        with open(output_path, "w") as f:
-            # Write report header
-            f.write("# 网络模拟参数生成评估报告\n\n")
-            f.write("## 执行摘要\n\n")
-            f.write(
-                "本报告展示了网络模拟参数生成方案的综合评估结果，"
-            )
-            f.write(
-                "包括行为转移质量和行为分离分析。\n\n"
-            )
-
-            # Behavior Transition Quality Evaluation
-            f.write("## 1. 行为转移质量评估\n\n")
-            f.write("### 评估指标\n")
-            f.write("| 指标 | 值 | 解释 |\n")
-            f.write("|------|-----|------|\n")
-
-            if "transition_quality" in results:
-                transition = results["transition_quality"]
-                f.write(
-                    f"| 平均转移熵 | {transition['average_transition_entropy']:.4f} | 值越低，转移越确定 |\n"
-                )
-                f.write(
-                    f"| 转移稀疏度 | {transition['transition_sparsity']:.4f} | {'低复杂度' if transition['transition_sparsity'] < 0.3 else '中等复杂度' if transition['transition_sparsity'] < 0.6 else '高复杂度'} |\n"
-                )
-
-            # Add transition matrix statistics
-            if "transition_matrix" in results:
-                transition_matrix = np.array(results["transition_matrix"])
-                f.write("\n### 转移矩阵统计\n")
-                f.write("| 统计量 | 值 |\n")
-                f.write("|--------|-----|\n")
-                f.write(f"| 状态数量 | {transition_matrix.shape[0]} |\n")
-                f.write(f"| 总转移数 | {np.sum(transition_matrix > 0):d} |\n")
-                f.write(
-                    f"| 平均转移概率 | {np.mean(transition_matrix):.4f} |\n"
-                )
-                f.write(
-                    f"| 最大转移概率 | {np.max(transition_matrix):.4f} |\n"
-                )
-                f.write(
-                    f"| 最小转移概率 | {np.min(transition_matrix[transition_matrix > 0]):.4f} |\n"
-                )
-
-            f.write("\n### 可视化\n")
-            f.write("- **交互式转移图**: `interactive_transition_graph.html`\n")
-            f.write("- **转移矩阵热力图**: `{}`\n".format(DEFAULT_TRANSITION_MATRIX_HEATMAP))
-            f.write("- **转移指标**: `{}`\n\n".format(DEFAULT_TRANSITION_METRICS))
-
-            # Behavior Separation Evaluation
-            f.write("## 2. 行为分离评估\n\n")
-
-            if "behavior_separation" in results:
-                separation = results["behavior_separation"]
-
-                # Separation Metrics
-                f.write("### 分离指标\n")
-                f.write("| 指标 | 值 | 解释 |\n")
-                f.write("|------|-----|------|\n")
-                f.write(
-                    f"| 平均类间距离 | {separation['separation_metrics']['avg_inter_cluster_distance']:.4f} | 值越高，分离效果越好 |\n"
-                )
-                f.write(
-                    f"| 平均类内距离 | {separation['separation_metrics']['avg_intra_cluster_distance']:.4f} | 值越低，凝聚力越好 |\n"
-                )
-                f.write(
-                    f"| 分离指数 | {separation['separation_metrics']['separation_index']:.4f} | {'良好' if separation['separation_metrics']['separation_index'] > 1.0 else '中等' if separation['separation_metrics']['separation_index'] > 0.5 else '较差'} |\n"
-                )
-
-                # PCA Variance Explained
-                if "pca_explained_variance" in separation["separation_metrics"]:
-                    pca_var = separation["separation_metrics"]["pca_explained_variance"]
-                    f.write("\n### PCA方差解释率\n")
-                    f.write(
-                        "| 主成分 | 方差解释率 | 累计方差 |\n"
-                    )
-                    f.write(
-                        "|--------|------------|----------|\n"
-                    )
-                    cumulative = 0.0
-                    for i, var in enumerate(pca_var[:3]):
-                        cumulative += var
-                        f.write(f"| PC{i + 1} | {var:.4f} | {cumulative:.4f} |\n")
-
-                # Behavior Statistics
-                f.write("\n### 行为统计信息\n")
-
-                # Behavior Distribution
-                f.write("#### 行为分布\n")
-                f.write("| 行为 | 数量 | 百分比 |\n")
-                f.write("|------|-----|--------|\n")
-                total_count = sum(
-                    stats["count"] for stats in separation["behavior_stats"].values()
-                )
-                for behavior_id, stats in separation["behavior_stats"].items():
-                    percentage = (stats["count"] / total_count) * 100
-                    f.write(
-                        f"| {behavior_id} | {stats['count']} | {percentage:.2f}% |\n"
-                    )
-
-                # 获取实际的特征数量
-                first_behavior = list(separation["behavior_stats"].values())[0]
-                actual_feature_count = len(first_behavior["mean"])
-                
-                # Mean Values per Feature
-                f.write("\n#### 特征均值\n")
-                # 动态生成表头，根据实际特征数量
-                feature_names = ["时延标准差", "丢包突发比例", "突发持续时间", "突发强度", "时延趋势", "时延5阶自相关"]
-                header_line = "| 行为 | " + " | ".join(feature_names[:actual_feature_count]) + " |\n"
-                f.write(header_line)
-                separator_line = "|------| " + " | ".join(["-----------" for _ in range(actual_feature_count)]) + " |\n"
-                f.write(separator_line)
-
-                for behavior_id, stats in separation["behavior_stats"].items():
-                    mean = stats["mean"]
-                    # 只显示实际数量的特征
-                    mean_values = [f"{val:.4f}" for val in mean[:actual_feature_count]]
-                    f.write(f"| {behavior_id} | {' | '.join(mean_values)} |\n")
-
-                # Standard Deviation Values per Feature
-                f.write("\n#### 特征标准差\n")
-                f.write(header_line)
-                f.write(separator_line)
-
-                for behavior_id, stats in separation["behavior_stats"].items():
-                    std = stats["std"]
-                    # 只显示实际数量的特征
-                    std_values = [f"{val:.4f}" for val in std[:actual_feature_count]]
-                    f.write(f"| {behavior_id} | {' | '.join(std_values)} |\n")
-
-                # Feature Importance by Behavior
-                f.write("\n#### 行为特征重要性\n")
-                f.write(
-                    "以下特征显示了行为之间的最显著差异：\n"
-                )
-
-                # Calculate feature importance based on coefficient of variation across behaviors
-                feature_names = [
-                    "时延标准差",
-                    "丢包突发比例",
-                    "突发持续时间",
-                    "突发强度",
-                    "时延趋势",
-                    "时延5阶自相关",
-                ]
-                feature_means = np.array(
-                    [
-                        [
-                            stats["mean"][i]
-                            for stats in separation["behavior_stats"].values()
-                        ]
-                        for i in range(actual_feature_count)
-                    ]
-                )
+        logger.info("评估结果和可视化已保存完成")
 
 
-                # Calculate coefficient of variation for each feature across behaviors
-                feature_cv = np.std(feature_means, axis=1) / np.mean(
-                    feature_means, axis=1
-                )
-                feature_cv[np.isnan(feature_cv)] = 0  # Handle division by zero
 
-                # Rank features by importance
-                ranked_features = sorted(
-                    zip(feature_names[:actual_feature_count], feature_cv), key=lambda x: x[1], reverse=True
-                )
 
-                for i, (feature_name, cv) in enumerate(ranked_features[:3], 1):
-                    f.write(
-                        f"{i}. **{feature_name}**: 变异系数 = {cv:.4f}\n"
-                    )
-
-                # Behavior Similarity
-                if "behavior_similarity" in separation:
-                    similarity = separation["behavior_similarity"]
-                    f.write("\n### 行为相似性\n")
-                    f.write("| 指标 | 值 | 解释 |\n")
-                    f.write("|------|-----|------|\n")
-                    f.write(
-                        f"| 平均相似性 | {similarity['average_similarity']:.4f} | 值越高，行为越相似 |\n"
-                    )
-                    f.write(
-                        f"| 最小相似性 | {similarity['min_similarity']:.4f} | 最不相似的行为对 |\n"
-                    )
-                    f.write(
-                        f"| 最大相似性 | {similarity['max_similarity']:.4f} | 最相似的行为对 |\n"
-                    )
-
-                    # Add similarity matrix
-                    f.write("\n#### 行为相似性矩阵\n")
-                    f.write("| 行为 | ")
-                    for behavior_id in similarity["behavior_ids"]:
-                        f.write(f"{behavior_id} | ")
-                    f.write("\n")
-
-                    f.write("|------| ")
-                    for _ in similarity["behavior_ids"]:
-                        f.write("-------| ")
-                    f.write("\n")
-
-                    for i, behavior_id in enumerate(similarity["behavior_ids"]):
-                        f.write(f"| {behavior_id} | ")
-                        for j in range(len(similarity["behavior_ids"])):
-                            f.write(f"{similarity['similarity_matrix'][i][j]:.4f} | ")
-                        f.write("\n")
-
-            f.write("\n### 可视化\n")
-            f.write("- **特征分布图**: ![特征分布图](feature_distributions.png)\n")
-            f.write("- **特征相关性热力图**: ![特征相关性热力图](feature_correlation.png)\n")
-            f.write("- **转移矩阵热力图**: ![转移矩阵热力图](transition_matrix_heatmap.png)\n\n")
-
-            # Behavior Samples
-            f.write("## 3. 行为样本\n\n")
-            f.write("### 典型样本\n")
-            f.write("- **典型样本**: `{}`\n\n".format(DEFAULT_TYPICAL_SAMPLES))
-
-            f.write("### 随机样本\n")
-            f.write("每个行为类别的随机样本：\n")
-            for i in range(8):
-                f.write("- 行为 {}: `{}_sample_*.png`\n".format(i, DEFAULT_BEHAVIOR_SAMPLE_PREFIX + str(i)))
-            f.write("\n")
-
-            # Conclusion and Recommendations
-            f.write("## 4. 结论和建议\n\n")
-
-            # Executive Summary based on metrics
-            has_transition = "transition_quality" in results
-            has_separation = "behavior_separation" in results
-
-            f.write("### 关键发现\n")
-            if has_transition:
-                transition = results["transition_quality"]
-                f.write(
-                    f"- **转移复杂度**: {'低' if transition['transition_sparsity'] < 0.3 else '中等' if transition['transition_sparsity'] < 0.6 else '高'}\n"
-                )
-                f.write(
-                    f"- **转移确定性**: {'高' if transition['average_transition_entropy'] < 0.5 else '中等' if transition['average_transition_entropy'] < 1.0 else '低'}\n"
-                )
-
-            if has_separation:
-                separation = results["behavior_separation"]
-                f.write(
-                    f"- **行为分离度**: {'良好' if separation['separation_metrics']['separation_index'] > 1.0 else '中等' if separation['separation_metrics']['separation_index'] > 0.5 else '较差'}\n"
-                )
-
-            f.write("\n### 建议\n")
-            f.write("1. **分析行为转移**: ")
-            if has_transition:
-                if results["transition_quality"]["average_transition_entropy"] > 1.0:
-                    f.write(
-                        "转移熵相对较高，表明行为变化更不可预测。建议分析其根本原因。\n"
-                    )
-                else:
-                    f.write(
-                        "转移熵可接受，表明行为变化可预测。\n"
-                    )
-            else:
-                f.write(
-                    "执行行为转移分析，了解行为如何随时间演变。\n"
-                )
-
-            f.write("2. **优化特征选择**: ")
-            f.write(
-                "考虑基于特征的相关性和重要性添加或移除特征，以改进结果。\n"
-            )
-
-            f.write("3. **与真实数据验证**: ")
-            f.write(
-                "将生成的模拟参数与真实网络数据进行比较，确保真实性。\n"
-            )
-
-            f.write("4. **迭代改进**: ")
-            f.write(
-                "使用评估结果迭代改进参数生成方案。\n\n"
-            )
-
-            # Appendices
-            f.write("## 附录\n\n")
-            f.write("### A. 评估指标定义\n")
-            f.write(
-                "- **轮廓系数**: 衡量一个对象与其自身簇的相似度，与其他簇相比。\n"
-            )
-            f.write(
-                "- **Calinski-Harabasz指数**: 类间方差与类内方差的比率。\n"
-            )
-            f.write(
-                "- **BIC/AIC**: 用于模型选择的贝叶斯信息准则和赤池信息准则。\n"
-            )
-            f.write(
-                "- **对数似然值**: 衡量模型对数据的拟合程度。\n"
-            )
-            f.write(
-                "- **转移熵**: 衡量状态转移的不确定性。\n"
-            )
-            f.write(
-                "- **转移稀疏度**: 非零转移概率的比例。\n"
-            )
-            f.write(
-                "- **分离指数**: 类间距离与类内距离的比率。\n\n"
-            )
-
-            f.write("### B. 可视化文件\n")
-            f.write(
-                "所有可视化文件都保存在与本报告相同的目录中。\n"
-            )
-            f.write(
-                "- 特征分析: `feature_distributions.png`, `feature_correlation.png`\n"
-            )
-            f.write(
-                "- 转移分析: `interactive_transition_graph.html`, `transition_matrix_heatmap.png`\n"
-            )
-            f.write(
-                "- 行为样本: `typical_samples.png`, `behavior_*_sample_*.png`\n"
-            )
-
-    def generate_transition_plots(self, transition_matrix: np.ndarray, output_dir: Path) -> None:
-        """Generate behavior transition visualization plots"""
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # 转移矩阵热力图
-        logger.info("生成转移矩阵热力图")
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(transition_matrix, annot=True, fmt='.3f', cmap='YlGnBu', square=True)
-        plt.xlabel('目标状态')
-        plt.ylabel('起始状态')
-        plt.title('行为转移矩阵热力图')
-        plt.tight_layout()
-        plt.savefig(output_dir / DEFAULT_TRANSITION_MATRIX_HEATMAP, dpi=300, bbox_inches='tight')
-        plt.close()
-
-        # 转移指标可视化
-        logger.info("生成转移指标可视化")
-        num_states = transition_matrix.shape[0]
-        
-        # 计算转移指标
-        # 1. 出度分布（每个状态转移到其他状态的数量）
-        out_degree = np.sum(transition_matrix > 0, axis=1)
-        
-        # 2. 入度分布（每个状态被其他状态转移到的数量）
-        in_degree = np.sum(transition_matrix > 0, axis=0)
-        
-        # 3. 转移熵（每个状态的不确定性）
-        transition_entropy = np.zeros(num_states)
-        for i in range(num_states):
-            row = transition_matrix[i, :]
-            row = row[row > 0]  # 只考虑非零概率
-            if len(row) > 0:
-                transition_entropy[i] = -np.sum(row * np.log2(row))
-        
-        # 4. 平均转移概率（每个状态的平均转移概率）
-        avg_transition_prob = np.mean(transition_matrix, axis=1)
-        
-        # 创建子图
-        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        
-        # 子图1: 出度分布
-        axes[0, 0].bar(range(num_states), out_degree)
-        axes[0, 0].set_xlabel('行为状态')
-        axes[0, 0].set_ylabel('出度')
-        axes[0, 0].set_title('每个行为状态的出度分布')
-        axes[0, 0].set_xticks(range(num_states))
-        axes[0, 0].set_xticklabels([f'行为 {i}' for i in range(num_states)], rotation=45)
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # 子图2: 入度分布
-        axes[0, 1].bar(range(num_states), in_degree)
-        axes[0, 1].set_xlabel('行为状态')
-        axes[0, 1].set_ylabel('入度')
-        axes[0, 1].set_title('每个行为状态的入度分布')
-        axes[0, 1].set_xticks(range(num_states))
-        axes[0, 1].set_xticklabels([f'行为 {i}' for i in range(num_states)], rotation=45)
-        axes[0, 1].grid(True, alpha=0.3)
-        
-        # 子图3: 转移熵分布
-        axes[1, 0].bar(range(num_states), transition_entropy)
-        axes[1, 0].set_xlabel('行为状态')
-        axes[1, 0].set_ylabel('转移熵')
-        axes[1, 0].set_title('每个行为状态的转移熵分布')
-        axes[1, 0].set_xticks(range(num_states))
-        axes[1, 0].set_xticklabels([f'行为 {i}' for i in range(num_states)], rotation=45)
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # 子图4: 平均转移概率分布
-        axes[1, 1].bar(range(num_states), avg_transition_prob)
-        axes[1, 1].set_xlabel('行为状态')
-        axes[1, 1].set_ylabel('平均转移概率')
-        axes[1, 1].set_title('每个行为状态的平均转移概率')
-        axes[1, 1].set_xticks(range(num_states))
-        axes[1, 1].set_xticklabels([f'行为 {i}' for i in range(num_states)], rotation=45)
-        axes[1, 1].grid(True, alpha=0.3)
-        
-        # 调整布局
-        plt.suptitle('行为转移指标', fontsize=16)
-        plt.tight_layout()
-        plt.subplots_adjust(top=0.92)
-        plt.savefig(output_dir / DEFAULT_TRANSITION_METRICS, dpi=300, bbox_inches='tight')
-        plt.close()
-
-        logger.info("转移可视化图表生成完成")
-
-    def generate_behavior_separation_plots(self, X: np.ndarray, labels: np.ndarray, output_dir: Path) -> None:
-        """Generate behavior separation visualization plots"""
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # 特征分布箱线图
-        logger.info("生成特征分布箱线图")
-        n_features = X.shape[1]
-        fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(15, 10))
-        axes = axes.flatten()
-
-        for i in range(min(n_features, 6)):
-            sns.boxplot(x=labels, y=X[:, i], ax=axes[i])
-            axes[i].set_title(f'特征 {i+1} 分布')
-            axes[i].set_xlabel('行为标签')
-            axes[i].set_ylabel('特征值')
-
-        # 隐藏多余的子图
-        for i in range(n_features, 6):
-            axes[i].set_visible(False)
-
-        plt.tight_layout()
-        plt.savefig(output_dir / 'feature_distributions.png', dpi=300, bbox_inches='tight')
-        plt.close()
-
-        # 特征相关性热力图
-        logger.info("生成特征相关性热力图")
-        plt.figure(figsize=(10, 8))
-        corr_matrix = np.corrcoef(X.T)
-        sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', square=True)
-        plt.title('特征相关性热力图')
-        plt.tight_layout()
-        plt.savefig(output_dir / 'feature_correlation.png', dpi=300, bbox_inches='tight')
-        plt.close()
-
-        logger.info("行为分离可视化图表生成完成")
-
-    def generate_visualizations(self, X: np.ndarray, labels: np.ndarray, transition_matrix: np.ndarray, output_dir: Path) -> None:
-        """Generate all visualizations for evaluation"""
-        logger.info("开始生成所有可视化图表")
-
-        # 生成转移可视化
-        self.generate_transition_plots(transition_matrix, output_dir)
-
-        # 生成行为分离可视化
-        self.generate_behavior_separation_plots(X, labels, output_dir)
-
-        logger.info("所有可视化图表生成完成")
-
-    def generate_html_report(self, results: Dict, output_path: Path) -> None:
-        """Generate a comprehensive HTML report from Markdown"""
-        logger.info(f"开始生成HTML报告: {output_path}")
-        
-        # 读取Markdown报告
-        markdown_path = output_path.with_suffix('.md')
-        if not markdown_path.exists():
-            logger.error(f"Markdown报告不存在: {markdown_path}")
-            # 如果Markdown报告不存在，先生成它
-            self.generate_comprehensive_report(results, markdown_path)
-        
-        with open(markdown_path, 'r', encoding='utf-8') as f:
-            markdown_content = f.read()
-        
-        # 将Markdown转换为HTML
-        html_content = markdown2.markdown(markdown_content, extras=[
-            'tables', 'fenced-code-blocks', 'header-ids', 'toc', 'footnotes'
-        ])
-        
-        # 构建完整的HTML报告
-        full_html = f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>网络行为发现效果评估报告</title>
-    <style>
-        /* Basic styles */
-        body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
-        .container {{ max-width: 1200px; margin: 0 auto; background-color: white; padding: 30px; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 5px; }}
-        h1 {{ color: #2c3e50; text-align: center; margin-bottom: 30px; }}
-        h2 {{ color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-top: 40px; }}
-        h3 {{ color: #27ae60; margin-top: 30px; }}
-        h4 {{ color: #e67e22; margin-top: 20px; }}
-        
-        /* Table styles */
-        table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
-        th, td {{ border: 1px solid #ddd; padding: 8px 12px; text-align: left; }}
-        th {{ background-color: #f2f2f2; font-weight: bold; }}
-        tr:nth-child(even) {{ background-color: #f9f9f9; }}
-        
-        /* List styles */
-        ul, ol {{ padding-left: 25px; }}
-        li {{ margin: 8px 0; }}
-        
-        /* Image styles */
-        img {{ max-width: 100%; height: auto; margin: 15px 0; border: 1px solid #ddd; padding: 5px; border-radius: 3px; display: block; margin-left: auto; margin-right: auto; }}
-        
-        /* Link styles */
-        a {{ color: #3498db; text-decoration: none; }}
-        a:hover {{ text-decoration: underline; }}
-        
-        /* Responsive design */
-        @media (max-width: 768px) {{
-            .container {{ padding: 15px; }}
-            h1 {{ font-size: 1.8em; }}
-            h2 {{ font-size: 1.5em; }}
-            table {{ font-size: 0.9em; }}
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        {html_content}
-    </div>
-</body>
-</html>"""
-        
-        # 保存HTML报告
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(full_html)
-        
-        logger.info(f"已生成HTML报告: {output_path}")

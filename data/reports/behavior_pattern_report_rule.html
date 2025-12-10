@@ -1,0 +1,851 @@
+
+        <!DOCTYPE html>
+        <html lang="zh-CN">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>网络行为模式发现报告 - 规则 行为检测</title>
+            <style>
+                * {
+                    box-sizing: border-box;
+                    margin: 0;
+                    padding: 0;
+                }
+
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                    font-size: 16px;
+                    line-height: 1.6;
+                    color: #333;
+                    background-color: #f5f7fa;
+                    margin: 0;
+                    padding: 0;
+                }
+
+                .container {
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+
+                h1 {
+                    color: #2c3e50;
+                    font-size: 28px;
+                    margin-bottom: 20px;
+                    padding-bottom: 10px;
+                    border-bottom: 2px solid #3498db;
+                }
+
+                h2 {
+                    color: #2c3e50;
+                    font-size: 24px;
+                    margin: 30px 0 15px;
+                    padding-left: 10px;
+                    border-left: 4px solid #3498db;
+                }
+
+                h3 {
+                    color: #2c3e50;
+                    font-size: 20px;
+                    margin: 25px 0 15px;
+                    padding-left: 8px;
+                    border-left: 3px solid #3498db;
+                }
+
+                p {
+                    margin: 15px 0;
+                    text-align: justify;
+                }
+
+                ul, ol {
+                    margin: 15px 0 15px 25px;
+                }
+
+                li {
+                    margin: 8px 0;
+                }
+
+                /* 表格样式优化 */
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 20px 0;
+                    background-color: white;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                }
+
+                th, td {
+                    padding: 12px 15px;
+                    text-align: left;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+
+                th {
+                    background-color: #3498db;
+                    color: white;
+                    font-weight: bold;
+                }
+
+                tr:nth-child(even) {
+                    background-color: #f9f9f9;
+                }
+
+                tr:hover {
+                    background-color: #f5f5f5;
+                }
+
+                /* 图片样式 */
+                img {
+                    max-width: 100%;
+                    height: auto;
+                    display: block;
+                    margin: 20px auto;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                    border-radius: 4px;
+                }
+
+                /* 代码块样式 */
+                pre {
+                    background-color: #f8f9fa;
+                    border: 1px solid #e9ecef;
+                    border-radius: 4px;
+                    padding: 16px;
+                    overflow-x: auto;
+                    margin: 20px 0;
+                }
+
+                code {
+                    font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+                    font-size: 14px;
+                    background-color: #f8f9fa;
+                    padding: 2px 4px;
+                    border-radius: 3px;
+                }
+
+                pre code {
+                    background-color: transparent;
+                    padding: 0;
+                    border-radius: 0;
+                }
+
+                /* 响应式设计 */
+                @media (max-width: 768px) {
+                    .container {
+                        padding: 10px;
+                    }
+
+                    h1 {
+                        font-size: 24px;
+                    }
+
+                    h2 {
+                        font-size: 20px;
+                    }
+
+                    h3 {
+                        font-size: 18px;
+                    }
+
+                    table {
+                        font-size: 14px;
+                    }
+
+                    th, td {
+                        padding: 8px 10px;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1 id="网络行为模式发现报告">网络行为模式发现报告</h1>
+
+<h2 id="行为检测方法规则">行为检测方法：规则</h2>
+
+<h2 id="1-行为转移质量评估">1. 行为转移质量评估</h2>
+
+<h3 id="上行行为转移指标">上行行为转移指标</h3>
+
+<table>
+<thead>
+<tr>
+  <th>指标名称</th>
+  <th>数值</th>
+  <th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>平均转移熵</td>
+  <td>0.8000</td>
+  <td>衡量状态转移不确定性，越低越确定</td>
+</tr>
+<tr>
+  <td>转移稀疏性</td>
+  <td>0.9000</td>
+  <td>非零转移概率占比，反映行为切换复杂度</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="下行行为转移指标">下行行为转移指标</h3>
+
+<table>
+<thead>
+<tr>
+  <th>指标名称</th>
+  <th>数值</th>
+  <th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>平均转移熵</td>
+  <td>0.0000</td>
+  <td>衡量状态转移不确定性，越低越确定</td>
+</tr>
+<tr>
+  <td>转移稀疏性</td>
+  <td>0.0000</td>
+  <td>非零转移概率占比，反映行为切换复杂度</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="2-特征降维可视化">2. 特征降维可视化</h2>
+
+<p>不同降维方法的对比：
+- PCA：线性降维，保留最大方差
+- t-SNE：非线性降维，专注于局部结构，适合可视化高维数据
+- UMAP：非线性降维，同时保留局部和全局结构，运行速度更快</p>
+
+<h3 id="21-pca-散点图">2.1 PCA 散点图</h3>
+
+<p><img src="plots/feature_space/pca_scatter.png" alt="PCA 散点图" /></p>
+
+<h3 id="22-pca-方差解释图">2.2 PCA 方差解释图</h3>
+
+<p><img src="plots/feature_space/pca_variance.png" alt="PCA 方差解释图" /></p>
+
+<h3 id="23-t-sne-散点图">2.3 t-SNE 散点图</h3>
+
+<p><img src="plots/feature_space/tsne.png" alt="t-SNE 散点图" /></p>
+
+<h3 id="24-umap-散点图">2.4 UMAP 散点图</h3>
+
+<p><img src="plots/feature_space/umap.png" alt="UMAP 散点图" /></p>
+
+<h2 id="3-特征分析">3. 特征分析</h2>
+
+<h3 id="31-特征分布直方图">3.1 特征分布直方图</h3>
+
+<p><img src="plots/feature_space/feature_distributions.png" alt="特征分布直方图" /></p>
+
+<h3 id="32-特征相关性热力图">3.2 特征相关性热力图</h3>
+
+<p><img src="plots/feature_space/feature_correlation.png" alt="特征相关性热力图" /></p>
+
+<h2 id="4-行为转移分析">4. 行为转移分析</h2>
+
+<h3 id="41-状态转移矩阵热力图">4.1 状态转移矩阵热力图</h3>
+
+<p><img src="plots/transition_matrix_heatmap.png" alt="状态转移矩阵热力图" /></p>
+
+<h2 id="5-行为特征分析">5. 行为特征分析</h2>
+
+<h3 id="51-上行行为特征均值">5.1 上行行为特征均值</h3>
+
+<table>
+<thead>
+<tr>
+  <th>行为类别</th>
+  <th>feat<em>delay</em>std</th>
+  <th>feat<em>loss</em>burst_ratio</th>
+  <th>feat<em>burst</em>duration</th>
+  <th>feat<em>burst</em>intensity</th>
+  <th>feat<em>delay</em>trend</th>
+  <th>feat<em>delay</em>acf_5</th>
+</tr>
+</thead>
+</table>
+
+<h3 id="52-下行行为特征均值">5.2 下行行为特征均值</h3>
+
+<table>
+<thead>
+<tr>
+  <th>行为类别</th>
+  <th>feat<em>delay</em>std</th>
+  <th>feat<em>loss</em>burst_ratio</th>
+  <th>feat<em>burst</em>duration</th>
+  <th>feat<em>burst</em>intensity</th>
+  <th>feat<em>delay</em>trend</th>
+  <th>feat<em>delay</em>acf_5</th>
+</tr>
+</thead>
+</table>
+
+<h2 id="6-标签时间轴图">6. 标签时间轴图</h2>
+
+<p>全局行为分布可视化，展示不同网络行为在时间轴上的分布：</p>
+
+<p><img src="plots/timelines/20251203_230356_b6x-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251203_230356_b6x-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251203_230356_b6x-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251203_230356_b6x-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251203_230356_b6x-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251203_230356_b6x-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_001204_b6x-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_001204_b6x-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_001204_b6x-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_001204_b6x-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_001204_b6x-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_001204_b6x-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_001204_b6x-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_001204_b6x-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_001204_b6x-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_001204_b6x-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_11.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_12.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_13.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_14.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_15.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_16.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_17.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_18.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_19.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_20.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_012208_co0-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_222027_ZGp-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_222027_ZGp-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_222027_ZGp-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_222027_ZGp-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_222027_ZGp-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_222027_ZGp-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_222027_ZGp-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_222027_ZGp-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_222027_ZGp-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_222027_ZGp-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_232415_ZGp-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251204_232415_ZGp-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251205_004119_ZGp-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251205_004119_ZGp-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251205_004119_ZGp-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251205_004119_ZGp-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251205_004119_ZGp-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251205_004119_ZGp-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251205_004119_ZGp-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251205_004119_ZGp-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251205_004119_ZGp-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251205_004119_ZGp-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_11.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_220111_8R7-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_11.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251206_234532_8R7-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251207_223333_vXS-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_000505_Tb7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_012110_Tb7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_012110_Tb7-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_012110_Tb7-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_012110_Tb7-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_012110_Tb7-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_012110_Tb7-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_012110_Tb7-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_012110_Tb7-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_012110_Tb7-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_012110_Tb7-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/20251208_224754_nXj-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251203_230356_b6x-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251203_230356_b6x-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251203_230356_b6x-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251203_230356_b6x-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251203_230356_b6x-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251203_230356_b6x-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_001204_b6x-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_001204_b6x-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_001204_b6x-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_001204_b6x-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_001204_b6x-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_001204_b6x-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_001204_b6x-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_001204_b6x-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_001204_b6x-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_001204_b6x-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_11.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_12.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_13.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_14.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_15.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_16.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_17.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_18.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_19.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_20.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_012208_co0-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_222027_ZGp-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_222027_ZGp-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_222027_ZGp-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_222027_ZGp-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_222027_ZGp-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_222027_ZGp-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_222027_ZGp-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_222027_ZGp-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_222027_ZGp-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_222027_ZGp-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_232415_ZGp-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251204_232415_ZGp-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251205_004119_ZGp-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251205_004119_ZGp-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251205_004119_ZGp-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251205_004119_ZGp-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251205_004119_ZGp-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251205_004119_ZGp-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251205_004119_ZGp-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251205_004119_ZGp-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251205_004119_ZGp-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251205_004119_ZGp-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_220111_8R7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_220111_8R7-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_220111_8R7-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_220111_8R7-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_220111_8R7-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_220111_8R7-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_220111_8R7-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_220111_8R7-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_220111_8R7-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_220111_8R7-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_234532_8R7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_234532_8R7-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_234532_8R7-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_234532_8R7-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_234532_8R7-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_234532_8R7-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_234532_8R7-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_234532_8R7-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_234532_8R7-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251206_234532_8R7-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251207_223333_vXS-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_000505_Tb7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_012110_Tb7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_012110_Tb7-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_012110_Tb7-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_012110_Tb7-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_012110_Tb7-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_012110_Tb7-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_012110_Tb7-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_012110_Tb7-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_012110_Tb7-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_012110_Tb7-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/down_20251208_224754_nXj-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251203_230356_b6x-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251203_230356_b6x-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251203_230356_b6x-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251203_230356_b6x-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251203_230356_b6x-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251203_230356_b6x-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_001204_b6x-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_001204_b6x-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_001204_b6x-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_001204_b6x-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_001204_b6x-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_001204_b6x-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_001204_b6x-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_001204_b6x-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_001204_b6x-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_001204_b6x-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_11.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_12.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_13.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_14.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_15.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_16.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_17.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_18.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_19.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_20.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_012208_co0-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_222027_ZGp-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_222027_ZGp-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_222027_ZGp-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_222027_ZGp-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_222027_ZGp-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_222027_ZGp-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_222027_ZGp-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_222027_ZGp-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_222027_ZGp-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_222027_ZGp-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_232415_ZGp-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251204_232415_ZGp-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251205_004119_ZGp-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251205_004119_ZGp-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251205_004119_ZGp-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251205_004119_ZGp-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251205_004119_ZGp-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251205_004119_ZGp-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251205_004119_ZGp-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251205_004119_ZGp-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251205_004119_ZGp-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251205_004119_ZGp-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_220111_8R7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_220111_8R7-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_220111_8R7-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_220111_8R7-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_220111_8R7-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_220111_8R7-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_220111_8R7-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_220111_8R7-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_220111_8R7-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_220111_8R7-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_234532_8R7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_234532_8R7-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_234532_8R7-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_234532_8R7-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_234532_8R7-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_234532_8R7-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_234532_8R7-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_234532_8R7-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_234532_8R7-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251206_234532_8R7-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251207_223333_vXS-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_000505_Tb7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_012110_Tb7-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_012110_Tb7-playback.txt_timeline_window_10.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_012110_Tb7-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_012110_Tb7-playback.txt_timeline_window_3.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_012110_Tb7-playback.txt_timeline_window_4.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_012110_Tb7-playback.txt_timeline_window_5.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_012110_Tb7-playback.txt_timeline_window_6.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_012110_Tb7-playback.txt_timeline_window_7.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_012110_Tb7-playback.txt_timeline_window_8.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_012110_Tb7-playback.txt_timeline_window_9.png" alt="时间轴图" /></p>
+
+<p><img src="plots/timelines/up_20251208_224754_nXj-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
+
+<h2 id="7-原始数据样本可视化">7. 原始数据样本可视化</h2>
+
+<p>以下是每个行为类别的典型样本对应的原始时延和丢包率可视化：</p>
+
+<p><img src="plots/behavior_samples/typical_samples.png" alt="典型样本" /></p>
+
+            </div>
+        </body>
+        </html>
+        

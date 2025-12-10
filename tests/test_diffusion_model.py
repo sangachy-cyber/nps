@@ -24,8 +24,7 @@ def device():
 def diffusion_model(device):
     """初始化扩散模型"""
     model = ConditionDiffusionModel(
-        input_dim=2,
-        num_behaviors=5,
+        input_dim=4,
         behavior_embed_dim=32,
         T=1000,
     )
@@ -39,18 +38,19 @@ def sample_input(device):
     """创建测试样本输入"""
     batch_size = 1
     seq_len = 600
-    input_dim = 2
+    input_dim = 4
+    cond_dim = 32  # 条件向量维度
 
     # 随机输入数据
     x = torch.randn(batch_size, seq_len, input_dim, device=device)
 
-    # 随机时间步
-    t = torch.randint(0, 1000, (batch_size, seq_len, 1), device=device)
+    # 随机时间步，归一化到[0, 1]范围
+    t_norm = torch.rand(batch_size, 1, 1, device=device)
 
-    # 随机行为ID
-    behavior_ids = torch.randint(0, 5, (batch_size, seq_len), device=device)
+    # 创建条件向量，使用随机值
+    condition_vector = torch.randn(batch_size, seq_len, cond_dim, device=device)
 
-    return x, t, behavior_ids
+    return x, t_norm, condition_vector
 
 
 def test_time2vec_forward():
@@ -81,49 +81,46 @@ def test_unet_block_forward():
 
 def test_unet_forward(sample_input, device):
     """测试 UNet 前向传播"""
-    x, t, behavior_embed = sample_input
-    behavior_embed = torch.randn(1, 600, 32, device=device)  # 模拟行为嵌入
+    x, t, condition_vector = sample_input
 
-    # 将 x 转换为 1D 卷积所需的形状 (batch, channels, seq_len)
-    # 注意：这里注释掉未使用的转换，如需使用请取消注释
-    # x_conv = x.transpose(1, 2)  # (1, 2, 600)
-
-    unet = UNet(input_dim=2, behavior_embed_dim=32)
+    unet = UNet(input_dim=4, behavior_embed_dim=32)
     unet.to(device)
 
-    output = unet(x, t, behavior_embed)
+    output = unet(x, t, condition_vector)
     assert output.shape == x.shape
 
 
 def test_diffusion_model_forward(diffusion_model, sample_input):
     """测试扩散模型前向传播"""
-    x, t, behavior_ids = sample_input
-    output = diffusion_model(x, t, behavior_ids)
+    x, t, condition_vector = sample_input
+    output = diffusion_model(x, t, condition_vector)
     assert output.shape == x.shape
 
 
 def test_diffusion_model_sample(diffusion_model, device):
     """测试扩散模型采样功能"""
-    # 创建行为ID张量
+    # 创建条件向量张量
     batch_size = 1
     seq_len = 600
-    behavior_ids = torch.randint(0, 5, (batch_size, seq_len), device=device)
+    cond_dim = 32
+    condition_vector = torch.randn(batch_size, seq_len, cond_dim, device=device)
 
     # 生成样本
-    generated = diffusion_model.sample(behavior_ids, device)
-    assert generated.shape == (batch_size, seq_len, 2)
+    generated = diffusion_model.sample(condition_vector)
+    assert generated.shape == (batch_size, seq_len, 4)
 
 
 def test_diffusion_model_repeated_sample(diffusion_model, device):
     """测试扩散模型重复采样"""
-    # 创建行为ID张量
+    # 创建条件向量张量
     batch_size = 1
     seq_len = 600
-    behavior_ids = torch.randint(0, 5, (batch_size, seq_len), device=device)
+    cond_dim = 32
+    condition_vector = torch.randn(batch_size, seq_len, cond_dim, device=device)
 
     # 生成两次样本
-    generated1 = diffusion_model.sample(behavior_ids, device)
-    generated2 = diffusion_model.sample(behavior_ids, device)
+    generated1 = diffusion_model.sample(condition_vector)
+    generated2 = diffusion_model.sample(condition_vector)
 
     # 确保两次生成的样本不同（随机性测试）
     assert not torch.allclose(generated1, generated2)

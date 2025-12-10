@@ -5,19 +5,19 @@
 
 import sys
 import os
+from pathlib import Path
 
 # 添加src目录到Python路径
 sys.path.append(os.path.abspath("src"))
 
-import pandas as pd
-from pathlib import Path
-
 # 导入日志模块和配置
 from network_simulation.utils.logger import get_logger
+from network_simulation.data_processing.data_processor import DataProcessor
 
 
 # 获取日志记录器
 logger = get_logger(__name__)
+
 
 def process_raw_data(input_file: Path, output_dir: Path):
     """处理单个原始网络数据文件
@@ -44,91 +44,13 @@ def process_raw_data(input_file: Path, output_dir: Path):
     """
     logger.info(f"正在处理原始数据文件: {input_file}")
 
-    # 读取原始文件内容
-    try:
-        with open(input_file, "r") as f:
-            lines = f.readlines()
-    except FileNotFoundError:
-        raise FileNotFoundError(f"原始数据文件不存在: {input_file}")
-    except PermissionError:
-        raise PermissionError(f"没有读取文件的权限: {input_file}")
+    # 初始化数据处理器
+    data_processor = DataProcessor()
 
-    # 跳过前12行元数据和分隔线，只保留数据行
-    if len(lines) < 13:
-        logger.error(f"文件格式不正确，缺少足够的元数据行: {input_file}")
-        raise ValueError(f"文件格式不正确，缺少足够的元数据行: {input_file}")
+    # 调用核心模块的处理函数
+    output_file = data_processor.process_raw_data(input_file, output_dir)
 
-    data_lines = lines[12:]
-
-    # 提取开始时间
-    try:
-        start_time_line = [line for line in lines if "Start Time" in line][0]
-        start_time_str = start_time_line.split(": ", 1)[1].strip()
-        start_time = pd.Timestamp(start_time_str)
-    except (IndexError, ValueError) as e:
-        raise ValueError(f"无法提取开始时间: {e}")
-
-    # 提取时间间隔（秒）
-    try:
-        interval_line = [line for line in lines if "Interval(sec)" in line][0]
-        interval_sec = float(interval_line.split(": ", 1)[1].strip())
-    except (IndexError, ValueError) as e:
-        raise ValueError(f"无法提取时间间隔: {e}")
-
-    # 解析数据行
-    data = []
-    for i, line in enumerate(data_lines):
-        line = line.strip()
-        if not line:
-            continue
-
-        # 分割数据行，按逗号分隔
-        parts = line.split(",")
-        if len(parts) < 6:
-            continue
-
-        try:
-            # 提取Delay1、Loss1和Bandwidth1
-            delay = float(parts[0])
-            loss_rate = float(parts[1]) / 100  # 转换为0-1范围
-            bandwidth1 = float(parts[2])
-        except ValueError:
-            print(f"警告: 第{i}行的数据格式不正确，跳过该行")
-            continue
-
-        # 当遇到时延大于2000ms的数据时，忽略它和它之后的所有数据
-        if delay > 2000:
-            print(f"在第{i}行发现时延大于2000ms，停止处理")
-            break
-
-        # 当Bandwidth1为0时，设置loss_rate为1.0（100%丢包）
-        if bandwidth1 == 0:
-            loss_rate = 1.0
-
-        # 计算该数据点的时间戳
-        timestamp = start_time + pd.Timedelta(seconds=interval_sec * i)
-
-        data.append({"timestamp": timestamp, "delay": delay, "loss_rate": loss_rate})
-
-    if not data:
-        raise ValueError(f"没有提取到有效数据: {input_file}")
-
-    # 创建DataFrame并打印数据统计信息
-    df = pd.DataFrame(data)
-    
-    # 添加原始文件路径列
-    df['file_path'] = str(input_file)
-    
-    logger.info(f"处理后数据形状: {df.shape}")
-    logger.info(f"时间范围: {df['timestamp'].min()} 到 {df['timestamp'].max()}")
-    logger.info(f"时延范围: {df['delay'].min():.2f} 到 {df['delay'].max():.2f} ms")
-    logger.info(f"丢包率范围: {df['loss_rate'].min():.4f} 到 {df['loss_rate'].max():.4f}")
-
-    # 保存处理后的数据到CSV文件
-    output_file = output_dir / f"{input_file.stem}_processed.csv"
-    df.to_csv(output_file, index=False)
-    print(f"处理后数据已保存到: {output_file}")
-
+    logger.info(f"处理后数据已保存到: {output_file}")
     return output_file
 
 

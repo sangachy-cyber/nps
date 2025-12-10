@@ -215,20 +215,42 @@ def test_save_evaluation_results(evaluator, sample_generated_data, tmp_output_di
 
     # 验证文件存在
     json_path = tmp_output_dir / "evaluation_results.json"
-    summary_path = tmp_output_dir / "evaluation_summary.txt"
-    markdown_path = tmp_output_dir / "comprehensive_evaluation_report.md"
-    html_path = tmp_output_dir / "comprehensive_evaluation_report.html"
 
     assert json_path.exists()
-    assert summary_path.exists()
-    assert markdown_path.exists()
-    assert html_path.exists()
 
     # 验证文件内容不为空
     assert json_path.stat().st_size > 0
-    assert summary_path.stat().st_size > 0
-    assert markdown_path.stat().st_size > 0
-    assert html_path.stat().st_size > 0
+
+
+def test_save_with_visualization(evaluator, sample_generated_data, tmp_output_dir):
+    """测试保存评估结果和可视化"""
+    # 评估数据
+    results = evaluator.evaluate(sample_generated_data)
+
+    # 创建示例数据
+    X = np.random.rand(100, 6)  # 100个样本，6个特征
+    labels = np.random.randint(0, 3, 100)  # 3个行为类别
+    transition_matrix = np.random.rand(3, 3)  # 3x3转移矩阵
+    transition_matrix = transition_matrix / transition_matrix.sum(axis=1, keepdims=True)  # 归一化
+
+    # 保存结果和可视化
+    evaluator.save_with_visualization(results, tmp_output_dir, X, labels, transition_matrix)
+
+    # 验证文件存在
+    json_path = tmp_output_dir / "evaluation_results.json"
+    md_report_path = tmp_output_dir / "evaluation_report.md"
+    html_report_path = tmp_output_dir / "evaluation_report.html"
+    plots_dir = tmp_output_dir / "plots"
+
+    assert json_path.exists()
+    assert md_report_path.exists()
+    assert html_report_path.exists()
+    assert plots_dir.exists()
+
+    # 验证文件内容不为空
+    assert json_path.stat().st_size > 0
+    assert md_report_path.stat().st_size > 0
+    assert html_report_path.stat().st_size > 0
 
 
 def test_evaluate_with_empty_data(evaluator):

@@ -13,17 +13,14 @@ sys.path.append(os.path.abspath("src"))
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import json
 from network_simulation.pattern_discovery.pattern_identifier import PatternIdentifier
 from network_simulation.utils.logger import get_logger
-from config import (
-    CLEANUP_OLD_FILES,
-    KEEP_LATEST_FILES
-)
+from config import CLEANUP_OLD_FILES, KEEP_LATEST_FILES
 
 
 # 获取日志记录器
 logger = get_logger(__name__)
+
 
 def discover_patterns(
     input_features_file: Path, input_processed_file: Path, output_patterns_dir: Path
@@ -60,38 +57,6 @@ def discover_patterns(
     # 加载处理后的数据
     processed_df = pd.read_csv(input_processed_file, parse_dates=["timestamp"])
 
-    # 加载合法丢包值 - 优先使用合并后的文件
-    merged_valid_loss_file = (
-        input_features_file.parent / "merged_valid_loss_values.json"
-    )
-    valid_loss_values_file = input_features_file.parent / "valid_loss_values.json"
-
-    if merged_valid_loss_file.exists():
-        # 使用合并后的合法丢包值
-        with open(merged_valid_loss_file, "r") as f:
-            valid_loss_values = json.load(f)
-        logger.info(f"使用合并后的合法丢包值: {valid_loss_values}")
-    elif valid_loss_values_file.exists():
-        # 否则使用单文件的合法丢包值
-        with open(valid_loss_values_file, "r") as f:
-            valid_loss_values = json.load(f)
-        logger.info(f"使用单文件的合法丢包值: {valid_loss_values}")
-    else:
-        # 如果都不存在，从数据中提取
-        logger.warning("未找到valid_loss_values.json，从数据中提取...")
-        # 从处理后的数据中提取合法丢包值
-        processed_df = pd.read_csv(input_processed_file)
-        if 'loss_rate' in processed_df.columns:
-            loss_rates = processed_df['loss_rate'].values
-            # 去重并排序
-            valid_loss_values = sorted(list(set(loss_rates)))
-            logger.info(f"从数据中提取的合法丢包值: {valid_loss_values}")
-        else:
-            # 如果无法提取，使用数据的统计特征生成
-            logger.warning("无法从数据中提取丢包率列，使用统计特征生成...")
-            valid_loss_values = [0.0]  # 至少包含0.0
-            logger.info(f"生成的合法丢包值: {valid_loss_values}")
-
     # 初始化模式识别器 - 使用规则检测方法
     pattern_identifier = PatternIdentifier(method="rule")
 
@@ -101,32 +66,31 @@ def discover_patterns(
     # 创建输出目录结构
     metadata_dir = output_patterns_dir / "metadata"
     metadata_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # 添加可视化
     from network_simulation.visualization.visualizer import Visualizer
+
     visualizer = Visualizer(output_patterns_dir)
-    
+
     # 提取特征矩阵
-    feature_columns = [col for col in features_df.columns if col.startswith('feat_')]
+    feature_columns = [col for col in features_df.columns if col.startswith("feat_")]
     X = features_df[feature_columns].values
-    
+
     # 生成HTML报告和可视化
     visualizer.generate_html_report(
-        patterns,
-        X,
-        feature_columns,
-        raw_data=processed_df,
-        features_df=features_df
+        patterns, X, feature_columns, raw_data=processed_df, features_df=features_df
     )
 
     # 保存模式识别结果
     pattern_identifier.save(
-        patterns, output_patterns_dir, features_df, valid_loss_values
+        patterns, output_patterns_dir
     )
 
     logger.info(f"行为模式已保存到: {output_patterns_dir}")
-    logger.info(f"行为标签长度: {len(patterns['labels'])}")
-    logger.info(f"唯一行为类型: {np.unique(patterns['labels'])}")
+    logger.info(f"上行行为标签长度: {len(patterns['labels_up'])}")
+    logger.info(f"上行唯一行为类型: {np.unique(patterns['labels_up'])}")
+    logger.info(f"下行行为标签长度: {len(patterns['labels_down'])}")
+    logger.info(f"下行唯一行为类型: {np.unique(patterns['labels_down'])}")
 
     return output_patterns_dir
 
@@ -208,8 +172,6 @@ def main():
     # 确保输出目录存在
     output_patterns_dir.mkdir(parents=True, exist_ok=True)
 
-
-
     # 发现行为模式
     if input_features_path.is_file() and input_processed_path.is_file():
         # 如果输入是两个文件，处理单个文件对
@@ -232,10 +194,12 @@ def main():
         logger.error("请先运行数据处理脚本生成处理后的数据文件")
         sys.exit(1)
 
-        # 合并所有处理文件
+        # 合并所有处理文件，保留每个样本的来源文件信息
         all_processed_df = []
         for processed_file in processed_files:
             df = pd.read_csv(processed_file, parse_dates=["timestamp"])
+            # 添加文件来源列
+            df["file_source"] = processed_file.stem
             all_processed_df.append(df)
         merged_processed_df = pd.concat(all_processed_df, ignore_index=True)
 
@@ -247,14 +211,14 @@ def main():
         merged_processed_df.to_csv(temp_merged_file, index=False)
 
         # 使用合并后的特征和合并后的处理数据生成行为标签
-        discover_patterns(
-            merged_features_file, temp_merged_file, output_patterns_dir
-        )
+        discover_patterns(merged_features_file, temp_merged_file, output_patterns_dir)
 
         # 删除临时文件
         temp_merged_file.unlink()
     else:
-        logger.error(f"输入类型不匹配 - 特征输入: {input_features_path.is_file() and '文件' or '目录'}, 处理后数据输入: {input_processed_path.is_file() and '文件' or '目录'}")
+        logger.error(
+            f"输入类型不匹配 - 特征输入: {input_features_path.is_file() and '文件' or '目录'}, 处理后数据输入: {input_processed_path.is_file() and '文件' or '目录'}"
+        )
         logger.error("请确保两个输入都是文件或都是目录")
         sys.exit(1)
 

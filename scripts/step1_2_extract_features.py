@@ -75,7 +75,7 @@ def extract_features(input_file: Path, output_dir: Path):
 
     # 保存特征数据
     features_output_file = output_dir / f"{input_file.stem}_features.csv"
-    features_df.to_csv(features_output_file, index=False)
+    feature_extractor.save(features_df, features_output_file)
 
     # 保存合法丢包值
     valid_loss_values_output = output_dir / "valid_loss_values.json"
@@ -133,7 +133,7 @@ def main():
         processed_files = list(input_path.glob("*.csv"))
         if not processed_files:
             logger.warning(f"在 {input_path} 中未找到 .csv 文件")
-        sys.exit(1)
+            sys.exit(1)
 
         # 首先合并所有处理后的文件
         all_processed_df = []

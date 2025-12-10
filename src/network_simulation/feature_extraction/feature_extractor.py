@@ -9,6 +9,7 @@ import numpy as np
 from scipy.stats import linregress
 from pathlib import Path
 from typing import Dict, List
+from config import CONGESTION_DELAY_THRESHOLD, CONGESTION_LOSS_THRESHOLD
 from network_simulation.utils.logger import get_logger
 
 # 初始化日志记录器
@@ -20,21 +21,27 @@ class FeatureExtractor:
 
     def __init__(self, config=None):
         # 导入配置
+        # 先定义默认值
+        default_window_size = 100
+        default_stride = 50
+
         if config is None:
             try:
-                # 尝试相对导入
-                from ...config import DEFAULT_WINDOW_SIZE, DEFAULT_STRIDE
+                # 使用绝对导入
+                from config import DEFAULT_WINDOW_SIZE, DEFAULT_STRIDE
                 self.window_samples = DEFAULT_WINDOW_SIZE  # 从配置文件加载窗口大小
                 self.slide_samples = DEFAULT_STRIDE  # 从配置文件加载滑动步长
+                default_window_size = DEFAULT_WINDOW_SIZE
+                default_stride = DEFAULT_STRIDE
                 logger.info(f"从配置文件加载参数: window_size={self.window_samples}, stride={self.slide_samples}")
-            except ImportError:
+            except ImportError as e:
                 # 导入失败时使用默认值
-                self.window_samples = 100  # 默认窗口大小
-                self.slide_samples = 50  # 默认滑动步长
-                logger.warning("配置文件导入失败，使用默认参数")
+                self.window_samples = default_window_size  # 默认窗口大小
+                self.slide_samples = default_stride  # 默认滑动步长
+                logger.warning(f"配置文件导入失败: {e}, 使用默认参数")
         else:
-            self.window_samples = config.get('window_size', 100)  # 从配置字典加载
-            self.slide_samples = config.get('stride', 50)
+            self.window_samples = config.get('window_size', default_window_size)  # 从配置字典加载，使用默认值作为备选
+            self.slide_samples = config.get('stride', default_stride)
             logger.info(f"从配置字典加载参数: window_size={self.window_samples}, stride={self.slide_samples}")
 
         self.time_granularity = 0.1  # 100ms
@@ -42,16 +49,38 @@ class FeatureExtractor:
         self.slide_step = self.slide_samples * self.time_granularity  # 计算滑动步长（秒）
         logger.info(f"特征提取器初始化完成，窗口大小: {self.window_size}秒, 滑动步长: {self.slide_step}秒")
 
+        # 记录拥塞判定阈值
+        from config import CONGESTION_DELAY_THRESHOLD, CONGESTION_LOSS_THRESHOLD
+        logger.info(f"拥塞判定阈值: delay ≥ {CONGESTION_DELAY_THRESHOLD}ms, loss ≥ {CONGESTION_LOSS_THRESHOLD}")
+
         # 合法丢包值集合和映射表，将在运行时自动提取
         self.valid_loss_values = []
         self.loss_mode_mapping = {}
 
     def load_data(self, file_path: Path) -> pd.DataFrame:
-        """Load processed network data"""
+        """加载处理后的网络数据
+
+        从CSV文件中加载处理后的网络数据，并进行基本的数据验证。
+
+        Args:
+            file_path: 处理后网络数据的CSV文件路径
+
+        Returns:
+            包含处理后网络数据的DataFrame
+        """
         return pd.read_csv(file_path, parse_dates=["timestamp"])
 
     def extract(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Extract features from processed network data"""
+        """从处理后的网络数据中提取特征
+
+        从处理后的网络数据中提取网络行为特征，包括统计特征、时序特征等。
+
+        Args:
+            df: 包含处理后网络数据的DataFrame
+
+        Returns:
+            包含提取特征的DataFrame
+        """
         logger.info(f"开始提取特征，数据行数: {len(df)}")
 
         # Extract valid loss values first
@@ -102,7 +131,9 @@ class FeatureExtractor:
         Returns:
             List of unique valid loss values sorted in ascending order
         """
-        loss_rates = df["loss_rate"].values
+        # 合并上下行丢包率数据
+        loss_rates = np.concatenate([df["loss_rate1"].values, df["loss_rate2"].values])
+
         unique_values = np.unique(loss_rates)
 
         # Remove NaN values if any
@@ -123,6 +154,8 @@ class FeatureExtractor:
 
     def _build_loss_mode_mapping(self) -> None:
         """Build loss mode mapping from valid loss values"""
+        # 显式排序，确保映射关系的稳定性和一致性
+        self.valid_loss_values = sorted(self.valid_loss_values)
         self.loss_mode_mapping = {
             val: idx for idx, val in enumerate(self.valid_loss_values)
         }
@@ -213,7 +246,7 @@ class FeatureExtractor:
         return normalized_features
 
     def _extract_window_features(
-        self, df: pd.DataFrame, window: pd.DataFrame, start_idx: int, end_idx: int
+        self, _df: pd.DataFrame, window: pd.DataFrame, start_idx: int, end_idx: int
     ) -> Dict:
         """Extract features for a single window"""
         features = {
@@ -223,46 +256,66 @@ class FeatureExtractor:
             "window_end_time": window["timestamp"].iloc[-1],
         }
 
-        # Extract delay and loss data
-        delays = window["delay"].values
-        loss_rates = window["loss_rate"].values
+        # 上行数据
+        delay1 = window["delay1"].values
+        loss_rate1 = window["loss_rate1"].values
+        delay1_log1 = np.log(1 + delay1)
 
-        # Apply log1 transformation to delay
-        delays_log1 = np.log(1 + delays)
+        # 下行数据
+        delay2 = window["delay2"].values
+        loss_rate2 = window["loss_rate2"].values
+        delay2_log1 = np.log(1 + delay2)
 
         # 1. 时序动态特征
-        # feat_delay_std: 10秒窗口内时延的标准差（基于log1变换）
-        features["feat_delay_std"] = np.std(delays_log1)
+        # 上行特征
+        features["feat_delay1_std"] = np.std(delay1_log1)
+        features["feat_loss1_nonzero_ratio"] = np.sum(loss_rate1 > 0) / len(loss_rate1)
+        features["feat_loss1_high_ratio"] = np.sum(loss_rate1 >= 0.5) / len(loss_rate1)
 
-        # feat_loss_nonzero_ratio: 10秒窗口内 loss_rate > 0 的采样点比例
-        non_zero_loss = np.sum(loss_rates > 0)
-        features["feat_loss_nonzero_ratio"] = non_zero_loss / len(loss_rates)
-
-        # feat_loss_high_ratio: 10秒窗口内 loss_rate ≥ 0.5 的采样点比例
-        high_loss = np.sum(loss_rates >= 0.5)
-        features["feat_loss_high_ratio"] = high_loss / len(loss_rates)
+        # 下行特征
+        features["feat_delay2_std"] = np.std(delay2_log1)
+        features["feat_loss2_nonzero_ratio"] = np.sum(loss_rate2 > 0) / len(loss_rate2)
+        features["feat_loss2_high_ratio"] = np.sum(loss_rate2 >= 0.5) / len(loss_rate2)
 
         # 2. 突发性特征
-        # feat_max_consec_loss: 窗口内最长连续 loss_rate > 0 的采样点数量
-        features["feat_max_consec_loss"] = self._calculate_max_consecutive_loss(
-            loss_rates
-        )
+        # 上行特征
+        features["feat_max_consec_loss1"] = self._calculate_max_consecutive_loss(loss_rate1)
+        features["feat_max_congestion_run1"] = self._calculate_max_congestion_run(delay1, loss_rate1)
 
-        # feat_max_congestion_run: 最长连续满足 (delay ≥ 500ms & loss ≥ 0.3) 的点数
-        features["feat_max_congestion_run"] = self._calculate_max_congestion_run(delays, loss_rates)
+        # 下行特征
+        features["feat_max_consec_loss2"] = self._calculate_max_consecutive_loss(loss_rate2)
+        features["feat_max_congestion_run2"] = self._calculate_max_congestion_run(delay2, loss_rate2)
 
         # 3. 长期趋势特征
-        # feat_delay_trend: 基于10秒窗口内 delay 序列的 Theil-Sen 稳健斜率估计（基于log1变换）
-        features["feat_delay_trend"] = self._calculate_delay_trend(delays_log1)
+        # 上行特征
+        features["feat_delay1_trend"] = self._calculate_delay_trend(delay1_log1)
+
+        # 下行特征
+        features["feat_delay2_trend"] = self._calculate_delay_trend(delay2_log1)
 
         # 4. 统计分布特征
-        # feat_delay_acf_5: 时延序列的5阶自相关系数（基于log1变换）
-        features["feat_delay_acf_5"] = self._calculate_acf(delays_log1, lag=5)
+        # 上行特征
+        features["feat_delay1_acf_5"] = self._calculate_acf(delay1_log1, lag=5)
+        features["feat_loss1_mode_encoded"] = self._calculate_loss_mode_encoded(loss_rate1)
 
-        # feat_loss_mode_encoded: 将窗口内 loss_rate 的众数映射为序数编码
-        features["feat_loss_mode_encoded"] = self._calculate_loss_mode_encoded(
-            loss_rates
-        )
+        # 下行特征
+        features["feat_delay2_acf_5"] = self._calculate_acf(delay2_log1, lag=5)
+        features["feat_loss2_mode_encoded"] = self._calculate_loss_mode_encoded(loss_rate2)
+
+        # 5. 跨方向关联特征（新增）
+        features["feat_delay_ratio"] = (np.mean(delay1) + 1) / (np.mean(delay2) + 1)
+        features["feat_loss_symmetry"] = 1.0 - abs(np.mean(loss_rate1) - np.mean(loss_rate2))
+
+        # 上行最大拥塞运行长度
+        max_congestion_run1 = features.get("feat_max_congestion_run1", 0)
+        # 下行最大拥塞运行长度
+        max_congestion_run2 = features.get("feat_max_congestion_run2", 0)
+
+        # 计算拥塞匹配度
+        if max_congestion_run1 > 0 or max_congestion_run2 > 0:
+            features["feat_congestion_match"] = min(max_congestion_run1, max_congestion_run2) / max(max_congestion_run1, max_congestion_run2, 1)
+        else:
+            features["feat_congestion_match"] = 1.0  # 无拥塞时匹配度为1
 
         return features
 
@@ -282,12 +335,12 @@ class FeatureExtractor:
         return max_consec
 
     def _calculate_max_congestion_run(self, delays: np.ndarray, loss_rates: np.ndarray) -> int:
-        """Calculate the maximum number of consecutive samples where delay ≥ 500ms and loss ≥ 0.3"""
+        """Calculate the maximum number of consecutive samples where delay ≥ CONGESTION_DELAY_THRESHOLD and loss ≥ CONGESTION_LOSS_THRESHOLD"""
         max_consec = 0
         current_consec = 0
 
         for delay, loss in zip(delays, loss_rates):
-            if delay >= 500 and loss >= 0.3:
+            if delay >= CONGESTION_DELAY_THRESHOLD and loss >= CONGESTION_LOSS_THRESHOLD:
                 current_consec += 1
                 if current_consec > max_consec:
                     max_consec = current_consec
