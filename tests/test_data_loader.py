@@ -22,8 +22,10 @@ def sample_csv_data():
     timestamps = pd.date_range(start="2025-01-01", periods=100, freq="100ms")
     data = {
         "timestamp": timestamps,
-        "delay": np.random.randn(100) * 10 + 20,
-        "loss_rate": np.random.choice([0.0, 0.5, 1.0], 100),
+        "delay1": np.random.randn(100) * 10 + 20,  # 上行延迟
+        "loss_rate1": np.random.choice([0.0, 0.5, 1.0], 100),  # 上行丢包率
+        "delay2": np.random.randn(100) * 10 + 15,  # 下行延迟，略低于上行
+        "loss_rate2": np.random.choice([0.0, 0.5, 1.0], 100),  # 下行丢包率
     }
     return pd.DataFrame(data)
 
@@ -34,8 +36,14 @@ def sample_csv_data_with_percentage_loss():
     timestamps = pd.date_range(start="2025-01-01", periods=100, freq="100ms")
     data = {
         "timestamp": timestamps,
-        "delay": np.random.randn(100) * 10 + 20,
-        "loss_rate": np.random.choice([0.0, 50.0, 100.0], 100),  # 百分比形式
+        "delay1": np.random.randn(100) * 10 + 20,  # 上行延迟
+        "loss_rate1": np.random.choice(
+            [0.0, 50.0, 100.0], 100
+        ),  # 上行丢包率，百分比形式
+        "delay2": np.random.randn(100) * 10 + 15,  # 下行延迟，略低于上行
+        "loss_rate2": np.random.choice(
+            [0.0, 50.0, 100.0], 100
+        ),  # 下行丢包率，百分比形式
     }
     return pd.DataFrame(data)
 
@@ -68,12 +76,16 @@ Delay1(ms),Loss1(%),Bandwidth1(Mbps),Delay2(ms),Loss2(%),Bandwidth2(Mbps)
 def sample_data_with_large_delay():
     """创建包含大延迟的测试数据"""
     timestamps = pd.date_range(start="2025-01-01", periods=100, freq="100ms")
-    delay = np.random.randn(100) * 10 + 20
-    delay[50:] = 3000  # 后半部分设置为超过2000ms的延迟
+    delay1 = np.random.randn(100) * 10 + 20
+    delay1[50:] = 3000  # 上行延迟后半部分设置为超过2000ms
+    delay2 = np.random.randn(100) * 10 + 15
+    delay2[50:] = 2800  # 下行延迟后半部分设置为超过2000ms
     data = {
         "timestamp": timestamps,
-        "delay": delay,
-        "loss_rate": np.random.choice([0.0, 0.5, 1.0], 100),
+        "delay1": delay1,
+        "loss_rate1": np.random.choice([0.0, 0.5, 1.0], 100),
+        "delay2": delay2,
+        "loss_rate2": np.random.choice([0.0, 0.5, 1.0], 100),
     }
     return pd.DataFrame(data)
 
@@ -95,7 +107,9 @@ def sample_csv_file(tmp_path, sample_csv_data):
 
 
 @pytest.fixture
-def sample_csv_file_with_percentage_loss(tmp_path, sample_csv_data_with_percentage_loss):
+def sample_csv_file_with_percentage_loss(
+    tmp_path, sample_csv_data_with_percentage_loss
+):
     """创建测试CSV文件，包含百分比形式的丢包率"""
     csv_file = tmp_path / "sample_data_percentage.csv"
     sample_csv_data_with_percentage_loss.to_csv(csv_file, index=False)
@@ -126,18 +140,24 @@ def test_load_csv_data(data_loader, sample_csv_file, sample_csv_data):
     assert isinstance(df, pd.DataFrame)
     assert len(df) == len(sample_csv_data)
     # 验证包含所需列
-    for col in ["timestamp", "delay", "loss_rate"]:
+    for col in ["timestamp", "delay1", "loss_rate1", "delay2", "loss_rate2"]:
         assert col in df.columns
     assert pd.api.types.is_datetime64_any_dtype(df["timestamp"])
-    assert pd.api.types.is_float_dtype(df["delay"])
-    assert pd.api.types.is_float_dtype(df["loss_rate"])
+    assert pd.api.types.is_float_dtype(df["delay1"])
+    assert pd.api.types.is_float_dtype(df["loss_rate1"])
+    assert pd.api.types.is_float_dtype(df["delay2"])
+    assert pd.api.types.is_float_dtype(df["loss_rate2"])
 
     # 验证丢包率在0-1范围内
-    assert df["loss_rate"].min() >= 0
-    assert df["loss_rate"].max() <= 1
+    assert df["loss_rate1"].min() >= 0
+    assert df["loss_rate1"].max() <= 1
+    assert df["loss_rate2"].min() >= 0
+    assert df["loss_rate2"].max() <= 1
 
 
-def test_load_csv_data_with_percentage_loss(data_loader, sample_csv_file_with_percentage_loss):
+def test_load_csv_data_with_percentage_loss(
+    data_loader, sample_csv_file_with_percentage_loss
+):
     """测试加载包含百分比形式丢包率的CSV数据"""
     # 加载数据
     df = data_loader.load(sample_csv_file_with_percentage_loss)
@@ -147,10 +167,13 @@ def test_load_csv_data_with_percentage_loss(data_loader, sample_csv_file_with_pe
     assert len(df) == 100
 
     # 验证丢包率已转换为小数形式且在0-1范围内
-    assert df["loss_rate"].min() >= 0
-    assert df["loss_rate"].max() <= 1
+    assert df["loss_rate1"].min() >= 0
+    assert df["loss_rate1"].max() <= 1
+    assert df["loss_rate2"].min() >= 0
+    assert df["loss_rate2"].max() <= 1
     # 验证至少有一个转换后的丢包率值
-    assert any(df["loss_rate"].isin([0.0, 0.5, 1.0]))
+    assert any(df["loss_rate1"].isin([0.0, 0.5, 1.0]))
+    assert any(df["loss_rate2"].isin([0.0, 0.5, 1.0]))
 
 
 def test_load_holowan_data(data_loader, sample_holowan_file):
@@ -162,15 +185,18 @@ def test_load_holowan_data(data_loader, sample_holowan_file):
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 3  # 3行数据
     # 验证包含所需列
-    for col in ["timestamp", "delay", "loss_rate"]:
+    for col in ["timestamp", "delay1", "loss_rate1", "delay2", "loss_rate2"]:
         assert col in df.columns
     assert pd.api.types.is_datetime64_any_dtype(df["timestamp"])
 
     # 验证丢包率处理
-    assert df["loss_rate"].min() >= 0
-    assert df["loss_rate"].max() <= 1
+    assert df["loss_rate1"].min() >= 0
+    assert df["loss_rate1"].max() <= 1
+    assert df["loss_rate2"].min() >= 0
+    assert df["loss_rate2"].max() <= 1
     # 验证带宽为0时丢包率设置为1.0
-    assert df.iloc[2]["loss_rate"] == 1.0  # 第三行带宽为0
+    assert df.iloc[2]["loss_rate1"] == 1.0  # 第三行上行带宽为0
+    assert df.iloc[2]["loss_rate2"] == 1.0  # 第三行下行带宽为0
 
 
 def test_preprocess(data_loader, sample_csv_data):
@@ -182,12 +208,14 @@ def test_preprocess(data_loader, sample_csv_data):
     assert isinstance(df_processed, pd.DataFrame)
     assert len(df_processed) > 0
     # 验证包含所需列
-    for col in ["timestamp", "delay", "loss_rate"]:
+    for col in ["timestamp", "delay1", "loss_rate1", "delay2", "loss_rate2"]:
         assert col in df_processed.columns
 
     # 验证丢包率在0-1范围内
-    assert df_processed["loss_rate"].min() >= 0
-    assert df_processed["loss_rate"].max() <= 1
+    assert df_processed["loss_rate1"].min() >= 0
+    assert df_processed["loss_rate1"].max() <= 1
+    assert df_processed["loss_rate2"].min() >= 0
+    assert df_processed["loss_rate2"].max() <= 1
 
     # 验证时间戳排序
     assert df_processed["timestamp"].is_monotonic_increasing
@@ -201,7 +229,8 @@ def test_preprocess_with_large_delay(data_loader, sample_data_with_large_delay):
     # 验证数据被截断
     assert len(df_processed) < len(sample_data_with_large_delay)
     # 验证截断后的数据中没有超过2000ms的延迟
-    assert df_processed["delay"].max() <= 2000
+    assert df_processed["delay1"].max() <= 2000
+    assert df_processed["delay2"].max() <= 2000
 
 
 def test_save_data(data_loader, sample_csv_data, tmp_output_dir):
@@ -225,8 +254,10 @@ def test_save_data(data_loader, sample_csv_data, tmp_output_dir):
 
 def test_preprocess_empty_data(data_loader):
     """测试处理空数据"""
-    # 创建空数据框
-    empty_df = pd.DataFrame(columns=["timestamp", "delay", "loss_rate"])
+    # 创建空数据框，使用双通道列名
+    empty_df = pd.DataFrame(
+        columns=["timestamp", "delay1", "loss_rate1", "delay2", "loss_rate2"]
+    )
 
     # 预处理数据
     df_processed = data_loader.preprocess(empty_df)

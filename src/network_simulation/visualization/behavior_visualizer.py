@@ -21,12 +21,32 @@ logger = get_logger(__name__)
 
 
 class BehaviorVisualizer(BaseVisualizer):
-    """行为可视化类"""
+    """行为可视化类
+
+    负责生成网络行为相关的可视化图表，包括行为转移矩阵、特征分布、相关性热力图
+    以及行为时间轴等多种可视化效果，用于分析和展示网络行为模式。
+    """
 
     def generate_transition_plots(
         self, transition_matrix: np.ndarray, output_dir: Path
     ) -> None:
-        """生成行为转移可视化图表"""
+        """生成行为转移可视化图表
+
+        生成行为转移矩阵热力图和转移指标可视化图表，用于分析网络行为模式之间的转移关系。
+
+        Args:
+            transition_matrix (np.ndarray): 行为转移矩阵，shape (n_behaviors, n_behaviors)
+            output_dir (Path): 输出目录路径
+
+        Examples:
+            >>> from network_simulation.visualization.behavior_visualizer import BehaviorVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> behavior_visualizer = BehaviorVisualizer(Path("output/visualizations"))
+            >>> transition_matrix = np.array([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.2, 0.3, 0.5]])
+            >>> output_dir = Path("output/visualizations/transition")
+            >>> behavior_visualizer.generate_transition_plots(transition_matrix, output_dir)
+        """
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # 转移矩阵热力图
@@ -121,7 +141,30 @@ class BehaviorVisualizer(BaseVisualizer):
     def visualize_feature_distribution(
         self, X: np.ndarray, labels: np.ndarray, feature_names: List[str], _method: str
     ) -> str:
-        """可视化特征分布并返回HTML片段"""
+        """可视化特征分布并返回HTML片段
+
+        可视化不同行为模式的特征分布，生成包含特征直方图的HTML片段。
+
+        Args:
+            X (np.ndarray): 特征矩阵，shape (n_samples, n_features)
+            labels (np.ndarray): 行为标签数组，shape (n_samples,)
+            feature_names (List[str]): 特征名称列表
+            _method (str): 可视化方法名称（未使用）
+
+        Returns:
+            str: 包含特征分布直方图的HTML片段
+
+        Examples:
+            >>> from network_simulation.visualization.behavior_visualizer import BehaviorVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> behavior_visualizer = BehaviorVisualizer(Path("output/visualizations"))
+            >>> X = np.random.randn(100, 3)
+            >>> labels = np.random.randint(0, 3, 100)
+            >>> feature_names = ["delay_std", "loss_nonzero_ratio", "max_congestion_run"]
+            >>> html = behavior_visualizer.visualize_feature_distribution(X, labels, feature_names, "rule")
+            >>> print(html[:100])  # 显示HTML片段的前100个字符
+        """
         unique_labels = np.unique(labels)
         n_features = len(feature_names)
 
@@ -156,7 +199,28 @@ class BehaviorVisualizer(BaseVisualizer):
     def visualize_correlation_heatmap(
         self, X: np.ndarray, feature_names: List[str], method: str
     ) -> str:
-        """可视化特征相关性热力图并返回HTML片段"""
+        """可视化特征相关性热力图并返回HTML片段
+
+        生成特征相关性热力图，用于分析网络行为特征之间的相互关系。
+
+        Args:
+            X (np.ndarray): 特征矩阵，shape (n_samples, n_features)
+            feature_names (List[str]): 特征名称列表
+            method (str): 可视化方法名称
+
+        Returns:
+            str: 包含特征相关性热力图的HTML片段
+
+        Examples:
+            >>> from network_simulation.visualization.behavior_visualizer import BehaviorVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> behavior_visualizer = BehaviorVisualizer(Path("output/visualizations"))
+            >>> X = np.random.randn(100, 5)
+            >>> feature_names = ["delay_std", "loss_nonzero_ratio", "max_congestion_run", "delay_trend", "delay_acf"]
+            >>> html = behavior_visualizer.visualize_correlation_heatmap(X, feature_names, "rule")
+            >>> print(html[:100])  # 显示HTML片段的前100个字符
+        """
         # 计算相关系数矩阵
         corr_matrix = np.corrcoef(X.T)
 
@@ -181,7 +245,26 @@ class BehaviorVisualizer(BaseVisualizer):
     def visualize_transition_matrix(
         self, transition_matrix: np.ndarray, method: str
     ) -> str:
-        """可视化状态转移矩阵热力图并返回HTML片段"""
+        """可视化状态转移矩阵热力图并返回HTML片段
+
+        生成状态转移矩阵热力图，用于分析网络行为模式之间的转移关系。
+
+        Args:
+            transition_matrix (np.ndarray): 状态转移矩阵，shape (n_behaviors, n_behaviors)
+            method (str): 可视化方法名称
+
+        Returns:
+            str: 包含状态转移矩阵热力图的HTML片段
+
+        Examples:
+            >>> from network_simulation.visualization.behavior_visualizer import BehaviorVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> behavior_visualizer = BehaviorVisualizer(Path("output/visualizations"))
+            >>> transition_matrix = np.array([[0.7, 0.2, 0.1], [0.3, 0.5, 0.2], [0.2, 0.3, 0.5]])
+            >>> html = behavior_visualizer.visualize_transition_matrix(transition_matrix, "rule")
+            >>> print(html[:100])  # 显示HTML片段的前100个字符
+        """
         # 创建热力图
         plt.figure(figsize=(10, 8))
         sns.heatmap(
@@ -214,7 +297,41 @@ class BehaviorVisualizer(BaseVisualizer):
         output_dir: Path,
         direction: str = "up",
     ) -> None:
-        """保存每类2个行为样本图"""
+        """保存每类2个行为样本图
+
+        为每种行为模式保存2个典型样本的可视化图表，展示网络行为的具体表现。
+
+        Args:
+            raw_data (pd.DataFrame): 原始网络数据
+            features_df (pd.DataFrame): 特征数据框，包含窗口信息
+            labels (List[int]): 行为标签列表
+            method (str): 可视化方法名称
+            output_dir (Path): 输出目录路径
+            direction (str, optional): 方向，"up"表示上行数据，"down"表示下行数据，默认为"up"
+
+        Examples:
+            >>> from network_simulation.visualization.behavior_visualizer import BehaviorVisualizer
+            >>> from pathlib import Path
+            >>> import pandas as pd
+            >>> import numpy as np
+            >>> behavior_visualizer = BehaviorVisualizer(Path("output/visualizations"))
+            >>> # 创建模拟数据
+            >>> raw_data = pd.DataFrame({
+            ...     "timestamp": pd.date_range("2023-01-01", periods=1000, freq="ms"),
+            ...     "delay1": np.random.randn(1000) * 10 + 50,
+            ...     "delay2": np.random.randn(1000) * 10 + 50,
+            ...     "loss_rate1": np.random.rand(1000) * 0.1,
+            ...     "loss_rate2": np.random.rand(1000) * 0.1,
+            ...     "file_path": ["test_file.csv"] * 1000
+            ... })
+            >>> features_df = pd.DataFrame({
+            ...     "window_start": [0, 100, 200, 300, 400],
+            ...     "window_end": [100, 200, 300, 400, 500]
+            ... })
+            >>> labels = [0, 1, 2, 0, 1]
+            >>> output_dir = Path("output/visualizations/samples")
+            >>> behavior_visualizer.save_behavior_samples(raw_data, features_df, labels, "rule", output_dir, "up")
+        """
         labels = np.array(labels)
         unique_labels = np.unique(labels)
 
@@ -223,7 +340,7 @@ class BehaviorVisualizer(BaseVisualizer):
             label_indices = np.where(label_mask)[0]
 
             if len(label_indices) > 0:
-                # Get actual behavior name from config
+                # 从配置中获取实际行为名称
                 behavior_name = BEHAVIOR_CATEGORY_MAP.get(label, f"行为 {label}")
 
                 # 每个类别挑2个样本
@@ -255,7 +372,21 @@ class BehaviorVisualizer(BaseVisualizer):
         sample_number: int,
         direction: str = "up",
     ) -> None:
-        """保存单个行为样本图"""
+        """保存单个行为样本图
+
+        保存单个网络行为样本的可视化图表，展示该样本的时延和丢包率变化情况。
+
+        Args:
+            raw_data (pd.DataFrame): 原始网络数据
+            features_df (pd.DataFrame): 特征数据框，包含窗口信息
+            sample_idx (int): 样本索引
+            label (int): 行为标签
+            behavior_name (str): 行为名称
+            method (str): 可视化方法名称
+            output_dir (Path): 输出目录路径
+            sample_number (int): 样本编号
+            direction (str, optional): 方向，"up"表示上行数据，"down"表示下行数据，默认为"up"
+        """
         # Get window start and end indices from features_df
         window_start_idx = int(features_df.iloc[sample_idx]["window_start"])
         window_end_idx = int(features_df.iloc[sample_idx]["window_end"])
@@ -287,7 +418,7 @@ class BehaviorVisualizer(BaseVisualizer):
         end_time = window_data["timestamp"].iloc[-1]
         time_duration = (end_time - start_time).total_seconds()
 
-        # Create dual-axis plot for delay and loss_rate
+        # 为时延和丢包率创建双轴图表
         plt.figure(figsize=(10, 6))
 
         # Plot delay on primary y-axis，统一最大值2000ms
@@ -337,7 +468,7 @@ class BehaviorVisualizer(BaseVisualizer):
         # 为丢包率添加轻微抖动，使0值更容易区分
         ax2.axhline(y=0, color="r", linestyle="--", alpha=0.3)
 
-        # Add title and legend
+        # 添加标题和图例
         method_name = "规则" if method == "rule" else method
         plt.title(
             f"{direction.upper()} {behavior_name} - 样本 {sample_number + 1} ({method_name} 检测)\n文件: {file_name} | 时间范围: {time_duration:.1f}秒"
@@ -349,14 +480,30 @@ class BehaviorVisualizer(BaseVisualizer):
         plt.xticks(rotation=45)
         plt.tight_layout()
 
-        # Save plot to file with direction prefix
+        # 保存图表到文件，带有方向前缀
         sample_file = (
             output_dir / f"{direction}_behavior_{label}_sample_{sample_number + 1}.png"
         )
         self._save_plot(sample_file)
 
     def _get_file_name(self, window_data: pd.DataFrame) -> str:
-        """获取窗口数据的文件名"""
+        """获取窗口数据的文件名
+
+        Args:
+            window_data (pd.DataFrame): 窗口数据
+
+        Returns:
+            str: 文件名
+
+        Examples:
+            >>> from network_simulation.visualization.behavior_visualizer import BehaviorVisualizer
+            >>> from pathlib import Path
+            >>> import pandas as pd
+            >>> behavior_visualizer = BehaviorVisualizer(Path("output/visualizations"))
+            >>> window_data = pd.DataFrame({"file_path": ["/path/to/test_file.csv"]})
+            >>> file_name = behavior_visualizer._get_file_name(window_data)
+            >>> print(file_name)  # 输出: test_file.csv
+        """
         if "file_path" in window_data.columns:
             file_path = window_data["file_path"].iloc[0]
             return file_path.split("/")[-1]  # 只保留文件名
@@ -371,11 +518,45 @@ class BehaviorVisualizer(BaseVisualizer):
         output_dir: Path,
         direction: str = "up",
     ) -> None:
-        """保存标签时间轴图"""
-        # Ensure labels is numpy array
+        """保存标签时间轴图
+
+        生成网络行为标签的时间轴图，展示不同行为模式在时间上的分布情况。
+
+        Args:
+            raw_data (pd.DataFrame): 原始网络数据
+            features_df (pd.DataFrame): 特征数据框，包含窗口信息
+            labels (List[int]): 行为标签列表
+            method (str): 可视化方法名称
+            output_dir (Path): 输出目录路径
+            direction (str, optional): 方向，"up"表示上行数据，"down"表示下行数据，默认为"up"
+
+        Examples:
+            >>> from network_simulation.visualization.behavior_visualizer import BehaviorVisualizer
+            >>> from pathlib import Path
+            >>> import pandas as pd
+            >>> import numpy as np
+            >>> behavior_visualizer = BehaviorVisualizer(Path("output/visualizations"))
+            >>> # 创建模拟数据
+            >>> raw_data = pd.DataFrame({
+            ...     "timestamp": pd.date_range("2023-01-01", periods=1000, freq="ms"),
+            ...     "delay1": np.random.randn(1000) * 10 + 50,
+            ...     "delay2": np.random.randn(1000) * 10 + 50,
+            ...     "loss_rate1": np.random.rand(1000) * 0.1,
+            ...     "loss_rate2": np.random.rand(1000) * 0.1,
+            ...     "file_path": ["test_file.csv"] * 1000
+            ... })
+            >>> features_df = pd.DataFrame({
+            ...     "window_start": [0, 100, 200, 300, 400],
+            ...     "window_end": [100, 200, 300, 400, 500]
+            ... })
+            >>> labels = [0, 1, 2, 0, 1]
+            >>> output_dir = Path("output/visualizations/timeline")
+            >>> behavior_visualizer.save_label_timeline(raw_data, features_df, labels, "rule", output_dir, "up")
+        """
+        # 确保标签是numpy数组
         labels = np.array(labels)
 
-        # Define behavior label mapping
+        # 定义行为标签映射
         behavior_labels = {
             0: "稳定",
             1: "弱突发",
@@ -415,7 +596,7 @@ class BehaviorVisualizer(BaseVisualizer):
             current_time = file_start_time
             window_end = file_end_time
 
-            # Create plot for the entire file
+            # 为整个文件创建图表
             self._create_timeline_window_plot(
                 window_data,
                 file_data,
@@ -448,18 +629,36 @@ class BehaviorVisualizer(BaseVisualizer):
         output_dir: Path,
         direction: str = "up",
     ) -> None:
-        """创建时间轴窗口图"""
-        # Resample data if needed, reduce data points to 500
+        """创建时间轴窗口图
+
+        创建单个时间轴窗口的可视化图表，展示网络行为随时间的变化情况。
+
+        Args:
+            window_data (pd.DataFrame): 窗口数据
+            file_data (pd.DataFrame): 文件数据
+            current_time (pd.Timestamp): 当前时间
+            window_end (pd.Timestamp): 窗口结束时间
+            file_start_time (pd.Timestamp): 文件开始时间
+            labels (np.ndarray): 行为标签数组
+            features_df (pd.DataFrame): 特征数据框
+            current_file_path (str): 当前文件路径
+            method (str): 可视化方法名称
+            behavior_labels (Dict[int, str]): 行为标签映射
+            window_count (int): 窗口计数
+            output_dir (Path): 输出目录路径
+            direction (str, optional): 方向，"up"表示上行数据，"down"表示下行数据，默认为"up"
+        """
+        # 如需要则重采样数据，将数据点减少到500个
         if len(window_data) > 500:
             step = len(window_data) // 500
             sampled_data = window_data.iloc[::step]
         else:
             sampled_data = window_data
 
-        # Ensure data is sorted by relative_time
+        # 确保数据按相对时间排序
         sampled_data = sampled_data.sort_values("relative_time")
 
-        # Smooth the data with moving average
+        # 使用移动平均平滑数据
         # 处理上下行时延
         sampled_data["delay1_smooth"] = (
             sampled_data["delay1"].rolling(window=3, min_periods=1).mean()
@@ -522,7 +721,7 @@ class BehaviorVisualizer(BaseVisualizer):
         # 设置Y轴样式
         self._setup_delay_axis(ax1, y_min, y_max)
 
-        # Create right Y-axis for loss rate
+        # 为丢包率创建右侧Y轴
         ax2 = ax1.twinx()
         # 绘制平滑后的上下行丢包率
         ax2.plot(
@@ -543,15 +742,15 @@ class BehaviorVisualizer(BaseVisualizer):
         )
         self._setup_loss_rate_axis(ax2)
 
-        # Add reference line for loss rate to enhance readability
+        # 为丢包率添加参考线，提高可读性
         ax2.axhline(y=0, color="r", linestyle="--", alpha=0.3)
 
-        # Combine legends
+        # 合并图例
         unique_labels = np.unique(labels)
         self._combine_legends(ax1, ax2, unique_labels, color_map, behavior_labels)
 
-        # Set plot title and labels
-        file_name = current_file_path.split("/")[-1]  # Only keep filename
+        # 设置图表标题和标签
+        file_name = current_file_path.split("/")[-1]  # 只保留文件名
         minutes_in_file = (current_time - file_start_time).total_seconds() / 60
 
         ax1.set_title(
@@ -560,19 +759,19 @@ class BehaviorVisualizer(BaseVisualizer):
         )
         ax1.set_xlabel("相对时间 (秒)", fontsize=12)
 
-        # Improve time ticks, show every 100 seconds
+        # 优化时间刻度，每100秒显示一个刻度
         x_min = sampled_data["relative_time"].min()
         x_max = sampled_data["relative_time"].max()
-        x_ticks = np.arange(x_min, x_max + 1, 100)  # Every 100 seconds
+        x_ticks = np.arange(x_min, x_max + 1, 100)  # 每100秒一个刻度
         ax1.set_xticks(x_ticks)
         ax1.set_xticklabels([f"{tick:.0f}s" for tick in x_ticks], fontsize=10)
 
-        # Optimize X-axis tick label rotation
+        # 优化X轴刻度标签旋转
         plt.xticks(rotation=45, ha="right")
 
-        # Adjust layout
+        # 调整布局
         plt.tight_layout()
-        plt.subplots_adjust(bottom=0.25)  # Increase bottom margin
+        plt.subplots_adjust(bottom=0.25)  # 增加底部边距
 
         # Save plot to file with file-specific window count and direction prefix
         import os
@@ -597,7 +796,23 @@ class BehaviorVisualizer(BaseVisualizer):
         y_min: float,
         y_max: float,
     ) -> None:
-        """绘制行为块"""
+        """绘制行为块
+
+        在时间轴图上绘制不同行为模式的彩色块，直观展示行为随时间的变化。
+
+        Args:
+            ax1 (plt.Axes): 绘图坐标轴
+            labels (np.ndarray): 行为标签数组
+            features_df (pd.DataFrame): 特征数据框
+            current_time (pd.Timestamp): 当前时间
+            window_end (pd.Timestamp): 窗口结束时间
+            current_file_path (str): 当前文件路径
+            file_start_time (pd.Timestamp): 文件开始时间
+            raw_data (pd.DataFrame): 原始数据
+            color_map (callable): 颜色映射函数
+            y_min (float): Y轴最小值
+            y_max (float): Y轴最大值
+        """
         for i, label in enumerate(labels):
             # Get window start and end indices
             window_start_idx = int(features_df.iloc[i]["window_start"])
@@ -642,7 +857,15 @@ class BehaviorVisualizer(BaseVisualizer):
             )
 
     def _setup_delay_axis(self, ax1: plt.Axes, y_min: float, y_max: float) -> None:
-        """设置时延轴样式"""
+        """设置时延轴样式
+
+        设置时间轴图中时延轴的样式，包括坐标轴范围、刻度、标签和网格线。
+
+        Args:
+            ax1 (plt.Axes): 绘图坐标轴
+            y_min (float): Y轴最小值
+            y_max (float): Y轴最大值
+        """
         ax1.set_ylim(y_min, y_max)
 
         # 确保Y轴有明确的数值标记
@@ -678,7 +901,13 @@ class BehaviorVisualizer(BaseVisualizer):
         ax1.grid(True, alpha=0.3, linestyle="--")
 
     def _setup_loss_rate_axis(self, ax2: plt.Axes) -> None:
-        """设置丢包率轴样式"""
+        """设置丢包率轴样式
+
+        设置时间轴图中丢包率轴的样式，包括坐标轴范围、刻度、标签和轴线。
+
+        Args:
+            ax2 (plt.Axes): 绘图坐标轴
+        """
         ax2.set_ylabel("丢包率", color="r", fontsize=14, fontweight="bold")
         ax2.tick_params(
             "y", colors="r", labelsize=12, width=3, length=15, direction="out"
@@ -700,7 +929,17 @@ class BehaviorVisualizer(BaseVisualizer):
         color_map: callable,
         behavior_labels: Dict[int, str],
     ) -> None:
-        """合并图例"""
+        """合并图例
+
+        合并时间轴图中两个Y轴的图例，并添加行为标签的图例，便于理解图表内容。
+
+        Args:
+            ax1 (plt.Axes): 第一个Y轴坐标轴（时延轴）
+            ax2 (plt.Axes): 第二个Y轴坐标轴（丢包率轴）
+            unique_labels (np.ndarray): 唯一行为标签数组
+            color_map (callable): 颜色映射函数
+            behavior_labels (Dict[int, str]): 行为标签映射
+        """
         # Get legends from both Y-axes
         lines1, labels1 = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()

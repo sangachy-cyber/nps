@@ -16,9 +16,16 @@ logger = get_logger(__name__)
 
 
 class DataProcessor:
-    """数据处理器，负责处理原始数据和预处理训练数据"""
+    """数据处理器，负责处理原始数据和预处理训练数据
+
+    该类提供了数据处理的高级接口，包括原始数据处理和训练数据预处理功能。
+    """
 
     def __init__(self):
+        """初始化数据处理器
+
+        创建 DataLoader 实例用于数据加载和预处理。
+        """
         self.data_loader = DataLoader()
 
     def process_raw_data(self, input_file: Path, output_dir: Path) -> Path:
@@ -27,8 +34,8 @@ class DataProcessor:
         该函数读取原始网络数据文件，解析延迟和丢包率数据，并将其转换为结构化的CSV格式。
 
         Args:
-            input_file: 原始数据文件路径，包含网络测量数据
-            output_dir: 处理后数据的输出目录路径
+            input_file (Path): 原始数据文件路径，包含网络测量数据
+            output_dir (Path): 处理后数据的输出目录路径
 
         Returns:
             Path: 处理后的数据文件路径
@@ -36,6 +43,15 @@ class DataProcessor:
         Raises:
             FileNotFoundError: 如果输入文件不存在
             ValueError: 如果数据格式不符合要求
+
+        Examples:
+            >>> from pathlib import Path
+            >>> from network_simulation.data_processing.data_processor import DataProcessor
+            >>> data_processor = DataProcessor()
+            >>> input_file = Path("data/raw/network_data.csv")
+            >>> output_dir = Path("data/processed")
+            >>> output_file = data_processor.process_raw_data(input_file, output_dir)
+            >>> print(f"处理完成，输出文件: {output_file}")
         """
         logger.info(f"正在处理原始数据文件: {input_file}")
 
@@ -52,16 +68,22 @@ class DataProcessor:
         logger.info(f"原始数据处理完成，保存到: {output_file}")
         return output_file
 
-    def preprocess_data(self, patterns_dir: Path, processed_file: Path, output_dir: Path, direction: str = "up") -> Path:
+    def preprocess_data(
+        self,
+        patterns_dir: Path,
+        processed_file: Path,
+        output_dir: Path,
+        direction: str = "up",
+    ) -> Path:
         """预处理训练数据
 
         该函数从处理后的数据文件和模式文件中加载数据，进行预处理，准备用于模型训练。
 
         Args:
-            patterns_dir: 模式文件目录路径
-            processed_file: 处理后的数据文件路径
-            output_dir: 预处理数据的输出目录路径
-            direction: 数据方向，可选值："up"（上行）或 "down"（下行）
+            patterns_dir (Path): 模式文件目录路径
+            processed_file (Path): 处理后的数据文件路径
+            output_dir (Path): 预处理数据的输出目录路径
+            direction (str, optional): 数据方向，可选值："up"（上行）或 "down"（下行），默认为 "up"
 
         Returns:
             Path: 预处理数据的输出文件路径
@@ -69,6 +91,15 @@ class DataProcessor:
         Raises:
             FileNotFoundError: 如果输入文件不存在
             ValueError: 如果数据格式不符合要求
+
+        Examples:
+            >>> from pathlib import Path
+            >>> data_processor = DataProcessor()
+            >>> patterns_dir = Path("patterns")
+            >>> processed_file = Path("data/processed/network_data_processed.csv")
+            >>> output_dir = Path("data/preprocessed")
+            >>> output_file = data_processor.preprocess_data(patterns_dir, processed_file, output_dir, direction="up")
+            >>> print(f"预处理完成，输出文件: {output_file}")
         """
         logger.info(f"正在预处理训练数据: {processed_file}，方向: {direction}")
 
@@ -86,6 +117,7 @@ class DataProcessor:
             raise FileNotFoundError(f"行为标签文件不存在: {labels_file}")
 
         import numpy as np
+
         labels = np.load(labels_file)
         logger.info(f"加载{direction}行行为标签，共 {len(labels)} 个标签")
 
@@ -95,6 +127,7 @@ class DataProcessor:
             raise FileNotFoundError(f"行为统计信息文件不存在: {behavior_stats_file}")
 
         import json
+
         with open(behavior_stats_file, "r") as f:
             behavior_stats = json.load(f)
         logger.info(f"加载{direction}行行为统计信息，共 {len(behavior_stats)} 种行为")
@@ -119,11 +152,40 @@ class DataProcessor:
         logger.info(f"训练数据预处理完成，保存到: {output_file}")
         return output_file
 
-    def _preprocess_data(self, processed_df: pd.DataFrame, labels: np.ndarray) -> pd.DataFrame:
-        """预处理上下行数据"""
+    def _preprocess_data(
+        self, processed_df: pd.DataFrame, labels: np.ndarray
+    ) -> pd.DataFrame:
+        """预处理上下行数据
+
+        Args:
+            processed_df (pd.DataFrame): 处理后的数据
+            labels (np.ndarray): 行为标签数组
+
+        Returns:
+            pd.DataFrame: 预处理后的数据，包含行为标签
+
+        Examples:
+            >>> from network_simulation.data_processing.data_processor import DataProcessor
+            >>> import pandas as pd
+            >>> import numpy as np
+            >>> data_processor = DataProcessor()
+            >>> processed_df = pd.DataFrame({
+            ...     'timestamp': pd.date_range('2025-01-01', periods=100, freq='100ms'),
+            ...     'delay1': np.random.normal(50, 10, 100),
+            ...     'loss_rate1': np.random.choice([0, 0.01, 0.05], 100),
+            ...     'delay2': np.random.normal(60, 15, 100),
+            ...     'loss_rate2': np.random.choice([0, 0.01, 0.05], 100)
+            ... })
+            >>> labels = np.random.choice([0, 1, 2, 3, 4, 5, 6, 7], 100)
+            >>> preprocessed_df = data_processor._preprocess_data(processed_df, labels)
+            >>> print(preprocessed_df.columns)
+            Index(['timestamp', 'delay1', 'loss_rate1', 'delay2', 'loss_rate2', 'behavior_label'], dtype='object')
+        """
         # 确保数据长度与标签长度匹配
         if len(processed_df) != len(labels):
-            logger.warning(f"数据长度 {len(processed_df)} 与标签长度 {len(labels)} 不匹配，将截断数据")
+            logger.warning(
+                f"数据长度 {len(processed_df)} 与标签长度 {len(labels)} 不匹配，将截断数据"
+            )
             min_length = min(len(processed_df), len(labels))
             processed_df = processed_df.iloc[:min_length]
             labels = labels[:min_length]

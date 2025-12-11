@@ -177,12 +177,12 @@
 <tbody>
 <tr>
   <td>平均转移熵</td>
-  <td>0.8000</td>
+  <td>0.5502</td>
   <td>衡量状态转移不确定性，越低越确定</td>
 </tr>
 <tr>
   <td>转移稀疏性</td>
-  <td>0.9000</td>
+  <td>0.1562</td>
   <td>非零转移概率占比，反映行为切换复杂度</td>
 </tr>
 </tbody>
@@ -201,12 +201,12 @@
 <tbody>
 <tr>
   <td>平均转移熵</td>
-  <td>0.0000</td>
+  <td>0.4190</td>
   <td>衡量状态转移不确定性，越低越确定</td>
 </tr>
 <tr>
   <td>转移稀疏性</td>
-  <td>0.0000</td>
+  <td>0.1406</td>
   <td>非零转移概率占比，反映行为切换复杂度</td>
 </tr>
 </tbody>
@@ -259,14 +259,87 @@
 <thead>
 <tr>
   <th>行为类别</th>
-  <th>feat<em>delay</em>std</th>
-  <th>feat<em>loss</em>burst_ratio</th>
-  <th>feat<em>burst</em>duration</th>
-  <th>feat<em>burst</em>intensity</th>
-  <th>feat<em>delay</em>trend</th>
-  <th>feat<em>delay</em>acf_5</th>
+  <th>feat<em>delay1</em>std</th>
+  <th>feat<em>delay1</em>mean</th>
+  <th>feat<em>loss1</em>std</th>
+  <th>feat<em>loss2</em>nonzero_ratio</th>
+  <th>feat<em>loss2</em>high_ratio</th>
+  <th>feat<em>loss2</em>mean</th>
+  <th>feat<em>loss2</em>std</th>
+  <th>feat<em>max</em>consec_loss2</th>
+  <th>feat<em>max</em>congestion_run2</th>
+  <th>feat<em>delay1</em>trend</th>
+  <th>feat<em>delay1</em>acf_5</th>
+  <th>feat<em>loss2</em>mode_encoded</th>
+  <th>feat<em>delay</em>ratio</th>
 </tr>
 </thead>
+<tbody>
+<tr>
+  <td>稳定</td>
+  <td>0.2146</td>
+  <td>4.3642</td>
+  <td>0.1262</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>-0.0013</td>
+  <td>0.1114</td>
+  <td>0.0000</td>
+  <td>1.0028</td>
+</tr>
+<tr>
+  <td>强突发</td>
+  <td>0.3190</td>
+  <td>6.4506</td>
+  <td>0.3662</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0038</td>
+  <td>0.4442</td>
+  <td>0.0000</td>
+  <td>1.0034</td>
+</tr>
+<tr>
+  <td>瞬时峰值</td>
+  <td>0.2086</td>
+  <td>3.2497</td>
+  <td>0.0995</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0008</td>
+  <td>0.0722</td>
+  <td>0.0000</td>
+  <td>0.9873</td>
+</tr>
+<tr>
+  <td>高丢包低延迟</td>
+  <td>1.1994</td>
+  <td>4.8308</td>
+  <td>0.3243</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>-0.0065</td>
+  <td>0.7549</td>
+  <td>0.0000</td>
+  <td>0.9990</td>
+</tr>
+</tbody>
 </table>
 
 <h3 id="52-下行行为特征均值">5.2 下行行为特征均值</h3>
@@ -275,14 +348,87 @@
 <thead>
 <tr>
   <th>行为类别</th>
-  <th>feat<em>delay</em>std</th>
-  <th>feat<em>loss</em>burst_ratio</th>
-  <th>feat<em>burst</em>duration</th>
-  <th>feat<em>burst</em>intensity</th>
-  <th>feat<em>delay</em>trend</th>
-  <th>feat<em>delay</em>acf_5</th>
+  <th>feat<em>delay1</em>std</th>
+  <th>feat<em>delay1</em>mean</th>
+  <th>feat<em>loss1</em>std</th>
+  <th>feat<em>loss2</em>nonzero_ratio</th>
+  <th>feat<em>loss2</em>high_ratio</th>
+  <th>feat<em>loss2</em>mean</th>
+  <th>feat<em>loss2</em>std</th>
+  <th>feat<em>max</em>consec_loss2</th>
+  <th>feat<em>max</em>congestion_run2</th>
+  <th>feat<em>delay1</em>trend</th>
+  <th>feat<em>delay1</em>acf_5</th>
+  <th>feat<em>loss2</em>mode_encoded</th>
+  <th>feat<em>delay</em>ratio</th>
 </tr>
 </thead>
+<tbody>
+<tr>
+  <td>稳定</td>
+  <td>0.1938</td>
+  <td>5.5722</td>
+  <td>0.2728</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>-0.0018</td>
+  <td>0.2517</td>
+  <td>0.0000</td>
+  <td>0.9998</td>
+</tr>
+<tr>
+  <td>弱突发</td>
+  <td>1.2831</td>
+  <td>5.0470</td>
+  <td>0.4046</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0340</td>
+  <td>0.7878</td>
+  <td>0.0000</td>
+  <td>1.0077</td>
+</tr>
+<tr>
+  <td>瞬时峰值</td>
+  <td>1.0182</td>
+  <td>5.2350</td>
+  <td>0.3072</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>-0.0281</td>
+  <td>0.7656</td>
+  <td>0.0000</td>
+  <td>0.9985</td>
+</tr>
+<tr>
+  <td>高延迟无丢包</td>
+  <td>0.0408</td>
+  <td>6.7209</td>
+  <td>0.2845</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0000</td>
+  <td>0.0007</td>
+  <td>0.4534</td>
+  <td>0.0000</td>
+  <td>1.0014</td>
+</tr>
+</tbody>
 </table>
 
 <h2 id="6-标签时间轴图">6. 标签时间轴图</h2>
@@ -657,6 +803,8 @@
 
 <p><img src="plots/timelines/down_20251208_224754_nXj-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
 
+<p><img src="plots/timelines/down_20251208_224754_nXj-playback_processed.csv_timeline_window_1.png" alt="时间轴图" /></p>
+
 <p><img src="plots/timelines/up_20251203_230356_b6x-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
 
 <p><img src="plots/timelines/up_20251203_230356_b6x-playback.txt_timeline_window_2.png" alt="时间轴图" /></p>
@@ -839,11 +987,53 @@
 
 <p><img src="plots/timelines/up_20251208_224754_nXj-playback.txt_timeline_window_1.png" alt="时间轴图" /></p>
 
+<p><img src="plots/timelines/up_20251208_224754_nXj-playback_processed.csv_timeline_window_1.png" alt="时间轴图" /></p>
+
 <h2 id="7-原始数据样本可视化">7. 原始数据样本可视化</h2>
 
 <p>以下是每个行为类别的典型样本对应的原始时延和丢包率可视化：</p>
 
 <p><img src="plots/behavior_samples/typical_samples.png" alt="典型样本" /></p>
+
+<h2 id="8-不同文件行为类别占比统计">8. 不同文件行为类别占比统计</h2>
+
+<table>
+<thead>
+<tr>
+  <th>文件名</th>
+  <th>稳定 (%)</th>
+  <th>强突发 (%)</th>
+  <th>瞬时峰值 (%)</th>
+  <th>高丢包低延迟 (%)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>unknown</td>
+  <td>15.0</td>
+  <td>60.0</td>
+  <td>10.0</td>
+  <td>15.0</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="81-文件总窗口数">8.1 文件总窗口数</h3>
+
+<table>
+<thead>
+<tr>
+  <th>文件名</th>
+  <th>总窗口数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>unknown</td>
+  <td>20</td>
+</tr>
+</tbody>
+</table>
 
             </div>
         </body>

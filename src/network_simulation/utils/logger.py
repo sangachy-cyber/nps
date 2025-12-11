@@ -12,14 +12,21 @@ from datetime import datetime
 
 
 class LoggerConfig:
-    """日志配置类"""
+    """日志配置类
+
+    该类用于配置和管理日志记录器，支持同时输出到控制台和文件，
+    提供统一的日志格式和级别控制。
+    """
 
     def __init__(self, log_dir: Path = Path("logs"), log_level: int = logging.INFO):
         """初始化日志配置
 
         Args:
-            log_dir: 日志文件保存目录
-            log_level: 日志级别，默认为INFO
+            log_dir (Path): 日志文件保存目录，默认为项目根目录下的 logs 目录
+            log_level (int): 日志级别，默认为 logging.INFO
+
+        Examples:
+            >>> logger_config = LoggerConfig(log_dir=Path("my_logs"), log_level=logging.DEBUG)
         """
         self.log_dir = log_dir
         self.log_level = log_level
@@ -29,17 +36,21 @@ class LoggerConfig:
 
         # 设置日志格式
         self.formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+            "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
         )
 
     def get_logger(self, name: str) -> logging.Logger:
         """获取指定名称的日志记录器
 
         Args:
-            name: 日志记录器名称，通常使用__name__
+            name (str): 日志记录器名称，通常使用__name__
 
         Returns:
-            logging.Logger: 配置好的日志记录器
+            logging.Logger: 配置好的日志记录器，同时输出到控制台和文件
+
+        Examples:
+            >>> logger = logger_config.get_logger(__name__)
+            >>> logger.info("这是一条信息日志")
         """
         # 创建日志记录器
         logger = logging.getLogger(name)
@@ -75,9 +86,18 @@ def get_logger(name: str) -> logging.Logger:
     """获取日志记录器的便捷函数
 
     Args:
-        name: 日志记录器名称，通常使用__name__
+        name (str): 日志记录器名称，通常使用__name__
 
     Returns:
-        logging.Logger: 配置好的日志记录器
+        logging.Logger: 配置好的日志记录器，同时输出到控制台和文件
+
+    Examples:
+        >>> from network_simulation.utils.logger import get_logger
+        >>> logger = get_logger(__name__)
+        >>> logger.debug("这是一条调试日志")
+        >>> logger.info("这是一条信息日志")
+        >>> logger.warning("这是一条警告日志")
+        >>> logger.error("这是一条错误日志")
+        >>> logger.critical("这是一条严重错误日志")
     """
     return logger_config.get_logger(name)

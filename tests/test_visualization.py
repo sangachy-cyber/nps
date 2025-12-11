@@ -7,10 +7,20 @@ import pytest
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from src.network_simulation.visualization.visualizer import Visualizer, BaseVisualizer, FeatureSpaceVisualizer, BehaviorVisualizer, ReportGenerator
+import warnings
+from src.network_simulation.visualization.visualizer import (
+    Visualizer,
+    BaseVisualizer,
+    FeatureSpaceVisualizer,
+    BehaviorVisualizer,
+    ReportGenerator,
+)
+
+# 忽略UMAP的所有警告
+warnings.filterwarnings("ignore", category=UserWarning, module="umap")
 
 
-@ pytest.fixture
+@pytest.fixture
 def tmp_output_dir(tmp_path):
     """创建临时输出目录"""
     output_dir = tmp_path / "visualization_output"
@@ -18,13 +28,13 @@ def tmp_output_dir(tmp_path):
     return output_dir
 
 
-@ pytest.fixture
+@pytest.fixture
 def visualizer(tmp_output_dir):
     """初始化可视化器"""
     return Visualizer(tmp_output_dir)
 
 
-@ pytest.fixture
+@pytest.fixture
 def sample_features():
     """创建测试特征数据"""
     n_samples = 100
@@ -32,14 +42,14 @@ def sample_features():
     return np.random.rand(n_samples, n_features)
 
 
-@ pytest.fixture
+@pytest.fixture
 def sample_labels():
     """创建测试标签数据"""
     n_samples = 100
     return np.random.randint(0, 3, n_samples)
 
 
-@ pytest.fixture
+@pytest.fixture
 def sample_feature_names():
     """创建测试特征名称"""
     return [
@@ -48,58 +58,49 @@ def sample_feature_names():
         "feat_burst_duration",
         "feat_burst_intensity",
         "feat_delay_trend",
-        "feat_delay_acf_5"
+        "feat_delay_acf_5",
     ]
 
 
-@ pytest.fixture
+@pytest.fixture
 def sample_transition_matrix():
     """创建测试转移矩阵"""
-    return np.array([
-        [0.8, 0.1, 0.1],
-        [0.2, 0.6, 0.2],
-        [0.1, 0.3, 0.6]
-    ])
+    return np.array([[0.8, 0.1, 0.1], [0.2, 0.6, 0.2], [0.1, 0.3, 0.6]])
 
 
-@ pytest.fixture
+@pytest.fixture
 def sample_evaluation_results():
     """创建测试评估结果"""
     return {
         "method": "rule",
         "labels": np.random.randint(0, 3, 100).tolist(),
-        "metrics": {
-            "average_transition_entropy": 0.8,
-            "transition_sparsity": 0.9
-        },
-        "transition_matrix": [
-            [0.8, 0.1, 0.1],
-            [0.2, 0.6, 0.2],
-            [0.1, 0.3, 0.6]
-        ],
+        "metrics": {"average_transition_entropy": 0.8, "transition_sparsity": 0.9},
+        "transition_matrix": [[0.8, 0.1, 0.1], [0.2, 0.6, 0.2], [0.1, 0.3, 0.6]],
         "separation_metrics": {
             "label_means": {
                 "0": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
                 "1": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7],
-                "2": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+                "2": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
             }
-        }
+        },
     }
 
 
-@ pytest.fixture
+@pytest.fixture
 def sample_raw_data():
     """创建测试原始数据"""
     timestamps = pd.date_range(start="2025-01-01", periods=1000, freq="100ms")
     data = {
         "timestamp": timestamps,
-        "delay": np.random.randn(1000) * 10 + 20,
-        "loss_rate": np.random.choice([0.0, 0.5, 1.0], 1000)
+        "delay1": np.random.randn(1000) * 10 + 20,  # 上行时延
+        "delay2": np.random.randn(1000) * 10 + 25,  # 下行时延
+        "loss_rate1": np.random.choice([0.0, 0.5, 1.0], 1000),  # 上行丢包率
+        "loss_rate2": np.random.choice([0.0, 0.5, 1.0], 1000),  # 下行丢包率
     }
     return pd.DataFrame(data)
 
 
-@ pytest.fixture
+@pytest.fixture
 def sample_features_df():
     """创建测试特征数据框"""
     n_windows = 10
@@ -112,7 +113,7 @@ def sample_features_df():
         "feat_burst_duration": np.random.rand(n_windows),
         "feat_burst_intensity": np.random.rand(n_windows),
         "feat_delay_trend": np.random.randn(n_windows),
-        "feat_delay_acf_5": np.random.rand(n_windows)
+        "feat_delay_acf_5": np.random.rand(n_windows),
     }
     return pd.DataFrame(data)
 
@@ -120,7 +121,12 @@ def sample_features_df():
 def test_chinese_visualization():
     """测试中文可视化"""
     # 设置中文支持，兼容Windows、MacOS和Linux，Linux系统优先使用文泉驿正黑
-    plt.rcParams["font.sans-serif"] = ["WenQuanYi Zen Hei", "SimHei", "Arial Unicode MS", "DejaVu Sans"]
+    plt.rcParams["font.sans-serif"] = [
+        "WenQuanYi Zen Hei",
+        "SimHei",
+        "Arial Unicode MS",
+        "DejaVu Sans",
+    ]
     plt.rcParams["axes.unicode_minus"] = False
 
     # 创建测试数据
@@ -168,7 +174,9 @@ def test_visualize_evaluation_results(visualizer, sample_evaluation_results):
 def test_visualize_pca_scatter(visualizer, sample_features, sample_labels):
     """测试可视化PCA散点图"""
     # 可视化PCA散点图
-    html_snippet = visualizer.visualize_pca_scatter(sample_features, sample_labels, "test_method")
+    html_snippet = visualizer.visualize_pca_scatter(
+        sample_features, sample_labels, "test_method"
+    )
 
     # 验证结果
     assert isinstance(html_snippet, str)
@@ -188,7 +196,9 @@ def test_visualize_pca_variance(visualizer, sample_features):
 def test_visualize_tsne_scatter(visualizer, sample_features, sample_labels):
     """测试可视化t-SNE散点图"""
     # 可视化t-SNE散点图
-    html_snippet = visualizer.visualize_tsne_scatter(sample_features, sample_labels, "test_method")
+    html_snippet = visualizer.visualize_tsne_scatter(
+        sample_features, sample_labels, "test_method"
+    )
 
     # 验证结果
     assert isinstance(html_snippet, str)
@@ -198,27 +208,37 @@ def test_visualize_tsne_scatter(visualizer, sample_features, sample_labels):
 def test_visualize_umap_scatter(visualizer, sample_features, sample_labels):
     """测试可视化UMAP散点图"""
     # 可视化UMAP散点图
-    html_snippet = visualizer.visualize_umap_scatter(sample_features, sample_labels, "test_method")
+    html_snippet = visualizer.visualize_umap_scatter(
+        sample_features, sample_labels, "test_method"
+    )
 
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "data:image/png;base64" in html_snippet
 
 
-def test_visualize_feature_distribution(visualizer, sample_features, sample_labels, sample_feature_names):
+def test_visualize_feature_distribution(
+    visualizer, sample_features, sample_labels, sample_feature_names
+):
     """测试可视化特征分布"""
     # 可视化特征分布
-    html_snippet = visualizer.visualize_feature_distribution(sample_features, sample_labels, sample_feature_names, "test_method")
+    html_snippet = visualizer.visualize_feature_distribution(
+        sample_features, sample_labels, sample_feature_names, "test_method"
+    )
 
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "data:image/png;base64" in html_snippet
 
 
-def test_visualize_correlation_heatmap(visualizer, sample_features, sample_feature_names):
+def test_visualize_correlation_heatmap(
+    visualizer, sample_features, sample_feature_names
+):
     """测试可视化特征相关性热力图"""
     # 可视化特征相关性热力图
-    html_snippet = visualizer.visualize_correlation_heatmap(sample_features, sample_feature_names, "test_method")
+    html_snippet = visualizer.visualize_correlation_heatmap(
+        sample_features, sample_feature_names, "test_method"
+    )
 
     # 验证结果
     assert isinstance(html_snippet, str)
@@ -228,51 +248,62 @@ def test_visualize_correlation_heatmap(visualizer, sample_features, sample_featu
 def test_visualize_transition_matrix(visualizer, sample_transition_matrix):
     """测试可视化转移矩阵"""
     # 可视化转移矩阵
-    html_snippet = visualizer.visualize_transition_matrix(sample_transition_matrix, "test_method")
+    html_snippet = visualizer.visualize_transition_matrix(
+        sample_transition_matrix, "test_method"
+    )
 
     # 验证结果
     assert isinstance(html_snippet, str)
     assert "data:image/png;base64" in html_snippet
 
 
-def test_generate_html_report(visualizer, sample_evaluation_results, sample_features, sample_feature_names):
+def test_generate_html_report(
+    visualizer, sample_evaluation_results, sample_features, sample_feature_names
+):
     """测试生成HTML报告"""
     # 生成HTML报告（不提供原始数据，避免出现索引越界问题）
     visualizer.generate_html_report(
-        sample_evaluation_results,
-        sample_features,
-        sample_feature_names
+        sample_evaluation_results, sample_features, sample_feature_names
     )
 
     # 验证报告文件生成 - 报告实际生成在配置的REPORTS_DIR中
     from config import REPORTS_DIR
-    report_file = REPORTS_DIR / f"behavior_pattern_report_{sample_evaluation_results['method']}.html"
+
+    report_file = (
+        REPORTS_DIR
+        / f"behavior_pattern_report_{sample_evaluation_results['method']}.html"
+    )
     assert report_file.exists()
     assert report_file.stat().st_size > 0
 
 
-def test_generate_html_report_no_raw_data(visualizer, sample_evaluation_results, sample_features, sample_feature_names):
+def test_generate_html_report_no_raw_data(
+    visualizer, sample_evaluation_results, sample_features, sample_feature_names
+):
     """测试不提供原始数据时生成HTML报告"""
     # 生成HTML报告（不提供原始数据）
     visualizer.generate_html_report(
-        sample_evaluation_results,
-        sample_features,
-        sample_feature_names
+        sample_evaluation_results, sample_features, sample_feature_names
     )
 
     # 验证报告文件生成 - 报告实际生成在配置的REPORTS_DIR中
     from config import REPORTS_DIR
-    report_file = REPORTS_DIR / f"behavior_pattern_report_{sample_evaluation_results['method']}.html"
+
+    report_file = (
+        REPORTS_DIR
+        / f"behavior_pattern_report_{sample_evaluation_results['method']}.html"
+    )
     assert report_file.exists()
     assert report_file.stat().st_size > 0
 
 
-def test_generate_separation_table(visualizer, sample_evaluation_results, sample_feature_names):
+def test_generate_separation_table(
+    visualizer, sample_evaluation_results, sample_feature_names
+):
     """测试生成分离度表格"""
     # 生成分离度表格
     html_table = visualizer._generate_separation_table(
-        sample_evaluation_results["separation_metrics"],
-        sample_feature_names
+        sample_evaluation_results["separation_metrics"], sample_feature_names
     )
 
     # 验证结果
@@ -286,10 +317,7 @@ def test_visualize_raw_data_samples(visualizer, sample_raw_data, sample_features
 
     # 可视化原始数据样本
     html_snippet = visualizer.visualize_raw_data_samples(
-        sample_raw_data,
-        sample_features_df,
-        sample_labels,
-        "test_method"
+        sample_raw_data, sample_features_df, sample_labels, "test_method"
     )
 
     # 验证结果
@@ -323,20 +351,24 @@ def test_report_generator_initialization(tmp_output_dir):
     assert report_generator is not None
 
 
-def test_report_generator_generate_markdown(sample_evaluation_results, sample_features, sample_feature_names, tmp_output_dir):
+def test_report_generator_generate_markdown(
+    sample_evaluation_results, sample_features, sample_feature_names, tmp_output_dir
+):
     """测试报告生成器生成Markdown报告"""
     base_visualizer = BaseVisualizer(tmp_output_dir)
     report_generator = ReportGenerator(base_visualizer)
 
     # 生成Markdown报告
     report_generator.generate_markdown_report(
-        sample_evaluation_results,
-        sample_features,
-        sample_feature_names
+        sample_evaluation_results, sample_features, sample_feature_names
     )
 
     # 验证报告文件生成 - 报告实际生成在配置的REPORTS_DIR中
     from config import REPORTS_DIR
-    report_file = REPORTS_DIR / f"behavior_pattern_report_{sample_evaluation_results['method']}.md"
+
+    report_file = (
+        REPORTS_DIR
+        / f"behavior_pattern_report_{sample_evaluation_results['method']}.md"
+    )
     assert report_file.exists()
     assert report_file.stat().st_size > 0

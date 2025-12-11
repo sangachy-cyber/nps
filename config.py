@@ -27,9 +27,10 @@ DEFAULT_MODEL_DIR = MODELS_DIR / "diffusion_model"
 DEFAULT_GENERATED_DIR = GENERATED_DIR
 
 # 模型参数配置
-DEFAULT_INPUT_DIM = 2
+DEFAULT_INPUT_DIM = 4  # 4维输入：上行延迟、上行丢包率、下行延迟、下行丢包率
 DEFAULT_BEHAVIOR_EMBED_DIM = 32
 DEFAULT_T = 1000
+DEFAULT_TIME_GRANULARITY = 0.1  # 100ms，时间粒度
 
 # 训练参数配置
 DEFAULT_EPOCHS = 100  # 训练轮数：从50增加到100，以提高模型收敛效果
@@ -99,7 +100,7 @@ BEHAVIOR_CATEGORY_MAP = {
     4: "高延迟无丢包",
     5: "高丢包低延迟",
     6: "强突发高延迟",
-    7: "复杂网络行为"
+    7: "复杂网络行为",
 }
 
 # 行为类别中文标签列表
@@ -111,7 +112,7 @@ BEHAVIOR_CATEGORY_LABELS = [
     "高延迟无丢包",
     "高丢包低延迟",
     "强突发高延迟",
-    "复杂网络行为"
+    "复杂网络行为",
 ]
 
 # 行为类别统一颜色配置
@@ -123,7 +124,7 @@ BEHAVIOR_CATEGORY_COLORS = {
     4: "#2196F3",  # 高延迟无丢包 - 蓝色
     5: "#9C27B0",  # 高丢包低延迟 - 紫色
     6: "#FF5722",  # 强突发高延迟 - 深橙色
-    7: "#00BCD4"   # 复杂网络行为 - 青色
+    7: "#00BCD4",  # 复杂网络行为 - 青色
 }
 
 # 行为类别颜色列表，与BEHAVIOR_CATEGORY_LABELS对应
@@ -135,7 +136,7 @@ BEHAVIOR_CATEGORY_COLOR_LIST = [
     "#2196F3",  # 高延迟无丢包 - 蓝色
     "#9C27B0",  # 高丢包低延迟 - 紫色
     "#FF5722",  # 强突发高延迟 - 深橙色
-    "#00BCD4"   # 复杂网络行为 - 青色
+    "#00BCD4",  # 复杂网络行为 - 青色
 ]
 
 # 可视化算法参数配置
@@ -159,3 +160,30 @@ DEFAULT_TIMELINE_XTICK_INTERVAL = 100  # 秒
 
 # 行为样本参数
 DEFAULT_BEHAVIOR_SAMPLES_PER_CLASS = 2
+
+# PatternIdentifier 配置
+PATTERN_IDENTIFIER_CONFIG = {
+    # 强突发检测阈值
+    "STRONG_BURST_DELAY_THRESHOLD": 400.0,  # Strong Burst的延迟阈值（ms）
+    "STRONG_BURST_LOSS_THRESHOLD": 0.25,  # Strong Burst的丢包率阈值
+    "STRONG_BURST_MIN_RUN": 15,  # Strong Burst的最小连续点数量
+    # 瞬时峰值检测阈值
+    "INSTANT_SPIKE_DELAY_THRESHOLD": 800.0,  # 瞬时峰值的延迟阈值（ms）
+    "INSTANT_SPIKE_LOSS_THRESHOLD": 0.8,  # 瞬时峰值的丢包率阈值
+    "INSTANT_SPIKE_MAX_COUNT": 5,  # 瞬时峰值的最大峰值点数量
+    "INSTANT_SPIKE_MAX_RATIO": 0.1,  # 瞬时峰值的最大峰值占比
+    # 弱突发检测阈值
+    "WEAK_BURST_LOSS_NONZERO_RATIO": 0.25,  # Weak Burst的丢包率非零比例阈值
+    "WEAK_BURST_MIN_CONDITIONS": 2,  # Weak Burst的最小满足条件数量
+    # 动态阈值配置
+    "DYNAMIC_THRESHOLD_WINDOW_SIZE": 100,  # 动态阈值计算的窗口大小
+    # 保存配置
+    "save_allowed_prefixes": ["feat_", "window_", "file_id"],  # 保存时允许的列名前缀
+    # 默认阈值常量
+    "DEFAULT_DELAY_MEAN_LOW": 50.0,  # 低延迟阈值（ms）
+    "DEFAULT_DELAY_MEAN_HIGH": 200.0,  # 高延迟阈值（ms）
+    "DEFAULT_DELAY_STD_HIGH": 100.0,  # 高延迟标准差阈值（ms）
+    "DEFAULT_LOSS_MEAN_LOW": 0.05,  # 低丢包率阈值
+    "DEFAULT_LOSS_MEAN_HIGH": 0.3,  # 高丢包率阈值
+    "DEFAULT_LOSS_STD_HIGH": 0.2,  # 高丢包率标准差阈值
+}

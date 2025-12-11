@@ -32,7 +32,7 @@ class ReportGenerator:
         feature_names: List[str],
         raw_data: pd.DataFrame = None,
         features_df: pd.DataFrame = None,
-        output_dir: Path = None
+        output_dir: Path = None,
     ) -> None:
         """生成综合Markdown报告"""
         method = results["method"]
@@ -51,58 +51,100 @@ class ReportGenerator:
         feature_space_dir = plots_dir / "feature_space"
         feature_space_dir.mkdir(exist_ok=True)
 
-        # Save standalone visualizations to their respective directories
+        # 将独立可视化保存到各自的目录
         if raw_data is not None and features_df is not None:
-            # Save behavior samples (1-3 per class) - 分别处理上下行标签
+            # 保存行为样本（每类1-3个）- 分别处理上下行标签
             behavior_visualizer = BehaviorVisualizer(self.base_visualizer.output_dir)
 
             # 处理上行标签
             labels_up = results.get("labels_up")
             if labels_up is not None:
                 behavior_visualizer.save_behavior_samples(
-                    raw_data, features_df, labels_up, method, behavior_samples_dir, direction="up"
+                    raw_data,
+                    features_df,
+                    labels_up,
+                    method,
+                    behavior_samples_dir,
+                    direction="up",
                 )
 
                 # Save label timeline - 上行
                 behavior_visualizer.save_label_timeline(
-                    raw_data, features_df, labels_up, method, timelines_dir, direction="up"
+                    raw_data,
+                    features_df,
+                    labels_up,
+                    method,
+                    timelines_dir,
+                    direction="up",
                 )
 
             # 处理下行标签
             labels_down = results.get("labels_down")
             if labels_down is not None:
                 behavior_visualizer.save_behavior_samples(
-                    raw_data, features_df, labels_down, method, behavior_samples_dir, direction="down"
+                    raw_data,
+                    features_df,
+                    labels_down,
+                    method,
+                    behavior_samples_dir,
+                    direction="down",
                 )
 
                 # Save label timeline - 下行
                 behavior_visualizer.save_label_timeline(
-                    raw_data, features_df, labels_down, method, timelines_dir, direction="down"
+                    raw_data,
+                    features_df,
+                    labels_down,
+                    method,
+                    timelines_dir,
+                    direction="down",
                 )
 
         # Save feature space visualizations - 分别为上下行生成
         feature_visualizer = FeatureSpaceVisualizer(self.base_visualizer.output_dir)
 
         # 为上下行创建独立的特征子集
-        up_feature_cols = [col for col in feature_names if col.endswith("1") or "ratio" in col or "symmetry" in col]
-        down_feature_cols = [col for col in feature_names if col.endswith("2") or "ratio" in col or "symmetry" in col]
+        up_feature_cols = [
+            col
+            for col in feature_names
+            if col.endswith("1") or "ratio" in col or "symmetry" in col
+        ]
+        down_feature_cols = [
+            col
+            for col in feature_names
+            if col.endswith("2") or "ratio" in col or "symmetry" in col
+        ]
 
         # 提取对应方向的特征矩阵
-        X_up = X[:, [i for i, col in enumerate(feature_names) if col in up_feature_cols]]
-        X_down = X[:, [i for i, col in enumerate(feature_names) if col in down_feature_cols]]
+        X_up = X[
+            :, [i for i, col in enumerate(feature_names) if col in up_feature_cols]
+        ]
+        X_down = X[
+            :, [i for i, col in enumerate(feature_names) if col in down_feature_cols]
+        ]
 
         # 处理上行标签
         labels_up = results.get("labels_up")
         if labels_up is not None:
             feature_visualizer.save_feature_space_visualizations(
-                X_up, labels_up, method, feature_space_dir, up_feature_cols, direction="up"
+                X_up,
+                labels_up,
+                method,
+                feature_space_dir,
+                up_feature_cols,
+                direction="up",
             )
 
         # 处理下行标签
         labels_down = results.get("labels_down")
         if labels_down is not None:
             feature_visualizer.save_feature_space_visualizations(
-                X_down, labels_down, method, feature_space_dir, down_feature_cols, direction="down"
+                X_down,
+                labels_down,
+                method,
+                feature_space_dir,
+                down_feature_cols,
+                direction="down",
             )
 
         # 生成标签时间轴图部分
@@ -110,14 +152,22 @@ class ReportGenerator:
         # 获取所有时间轴图文件
         timeline_files = sorted(timelines_dir.glob("*.png"))
         for timeline_file in timeline_files:
-            timeline_images.append(f"![时间轴图]({timeline_file.relative_to(REPORTS_DIR)})")
-        timeline_content = "\n\n".join(timeline_images) if timeline_images else "暂无时间轴图数据"
+            timeline_images.append(
+                f"![时间轴图]({timeline_file.relative_to(REPORTS_DIR)})"
+            )
+        timeline_content = (
+            "\n\n".join(timeline_images) if timeline_images else "暂无时间轴图数据"
+        )
 
         # 统计不同文件中各行为类别的占比
-        file_behavior_stats = self._generate_file_behavior_stats(raw_data, features_df, results)
+        file_behavior_stats = self._generate_file_behavior_stats(
+            raw_data, features_df, results
+        )
 
         # 生成Markdown报告内容
-        markdown_content = self._generate_markdown_content(results, method, feature_names, file_behavior_stats, timeline_content)
+        markdown_content = self._generate_markdown_content(
+            results, method, feature_names, file_behavior_stats, timeline_content
+        )
 
         # 确定输出目录
         if output_dir is None:
@@ -154,13 +204,25 @@ class ReportGenerator:
 
 ## 1. 统计保真度 (L1)
 
+### 1.1 上行数据
+
 | 指标名称 | 数值 | 说明 |
 |----------|------|------|
-| 时延均值 | {results["statistical_fidelity"]["delay_mean"]:.2f} ms | 生成数据的平均时延 |
-| 时延标准差 | {results["statistical_fidelity"]["delay_std"]:.2f} ms | 生成数据的时延标准差 |
-| 丢包率均值 | {results["statistical_fidelity"]["loss_rate_mean"]:.4f} | 生成数据的平均丢包率 |
-| 丢包率标准差 | {results["statistical_fidelity"]["loss_rate_std"]:.4f} | 生成数据的丢包率标准差 |
-| 丢包率范围 | [{results["statistical_fidelity"]["loss_rate_range"]["min"]:.4f}, {results["statistical_fidelity"]["loss_rate_range"]["max"]:.4f}] | 生成数据的丢包率范围 |
+| 时延均值 | {results["statistical_fidelity"]["delay1_mean"]:.2f} ms | 生成数据的上行平均时延 |
+| 时延标准差 | {results["statistical_fidelity"]["delay1_std"]:.2f} ms | 生成数据的上行时延标准差 |
+| 丢包率均值 | {results["statistical_fidelity"]["loss_rate1_mean"]:.4f} | 生成数据的上行平均丢包率 |
+| 丢包率标准差 | {results["statistical_fidelity"]["loss_rate1_std"]:.4f} | 生成数据的上行丢包率标准差 |
+| 丢包率范围 | [{results["statistical_fidelity"]["loss_rate1_range"]["min"]:.4f}, {results["statistical_fidelity"]["loss_rate1_range"]["max"]:.4f}] | 生成数据的上行丢包率范围 |
+
+### 1.2 下行数据
+
+| 指标名称 | 数值 | 说明 |
+|----------|------|------|
+| 时延均值 | {results["statistical_fidelity"]["delay2_mean"]:.2f} ms | 生成数据的下行平均时延 |
+| 时延标准差 | {results["statistical_fidelity"]["delay2_std"]:.2f} ms | 生成数据的下行时延标准差 |
+| 丢包率均值 | {results["statistical_fidelity"]["loss_rate2_mean"]:.4f} | 生成数据的下行平均丢包率 |
+| 丢包率标准差 | {results["statistical_fidelity"]["loss_rate2_std"]:.4f} | 生成数据的下行丢包率标准差 |
+| 丢包率范围 | [{results["statistical_fidelity"]["loss_rate2_range"]["min"]:.4f}, {results["statistical_fidelity"]["loss_rate2_range"]["max"]:.4f}] | 生成数据的下行丢包率范围 |
 
 ## 2. 不可区分性 (L2)
 
@@ -171,12 +233,28 @@ class ReportGenerator:
 
 ## 3. 动态合理性 (L3)
 
+### 3.1 上行数据
+
 | 指标名称 | 数值 | 说明 |
 |----------|------|------|
-| 时延5阶自相关 | {results["dynamic_rationality"]["delay_acf_5"]:.4f} | 时延序列的自相关性 |
-| 突发数量 | {results["dynamic_rationality"]["burst_statistics"]["num_bursts"]} | 生成数据中的丢包突发数量 |
-| 平均突发持续时间 | {results["dynamic_rationality"]["burst_statistics"]["avg_burst_duration"]:.2f} 秒 | 丢包突发的平均持续时间 |
-| 突发频率 | {results["dynamic_rationality"]["burst_statistics"]["burst_frequency"]:.4f} 突发/秒 | 每秒的平均突发次数 |
+| 时延5阶自相关 | {results["dynamic_rationality"]["delay1_acf_5"]:.4f} | 上行时延序列的自相关性 |
+| 突发数量 | {results["dynamic_rationality"]["burst_statistics1"]["num_bursts"]} | 生成数据中的上行丢包突发数量 |
+| 平均突发持续时间 | {results["dynamic_rationality"]["burst_statistics1"]["avg_burst_duration"]:.2f} 秒 | 上行丢包突发的平均持续时间 |
+| 突发频率 | {results["dynamic_rationality"]["burst_statistics1"]["burst_frequency"]:.4f} 突发/秒 | 上行每秒的平均突发次数 |
+
+### 3.2 下行数据
+
+| 指标名称 | 数值 | 说明 |
+|----------|------|------|
+| 时延5阶自相关 | {results["dynamic_rationality"]["delay2_acf_5"]:.4f} | 下行时延序列的自相关性 |
+| 突发数量 | {results["dynamic_rationality"]["burst_statistics2"]["num_bursts"]} | 生成数据中的下行丢包突发数量 |
+| 平均突发持续时间 | {results["dynamic_rationality"]["burst_statistics2"]["avg_burst_duration"]:.2f} 秒 | 下行丢包突发的平均持续时间 |
+| 突发频率 | {results["dynamic_rationality"]["burst_statistics2"]["burst_frequency"]:.4f} 突发/秒 | 下行每秒的平均突发次数 |
+
+### 3.3 行为对齐
+
+| 指标名称 | 数值 | 说明 |
+|----------|------|------|
 | 行为对齐准确率 | {results["dynamic_rationality"]["behavior_alignment_accuracy"]:.4f} | 生成数据与预期行为的对齐程度 |
 
 ## 4. 总体评估
@@ -186,10 +264,7 @@ class ReportGenerator:
 """
 
     def _generate_file_behavior_stats(
-        self,
-        raw_data: pd.DataFrame,
-        features_df: pd.DataFrame,
-        results: Dict
+        self, raw_data: pd.DataFrame, features_df: pd.DataFrame, results: Dict
     ) -> str:
         """生成文件行为统计"""
         file_behavior_stats = ""
@@ -211,18 +286,17 @@ class ReportGenerator:
                 mid_idx = (window_start + window_end) // 2
                 # 确保mid_idx不超过raw_data的长度
                 mid_idx = min(mid_idx, len(raw_data) - 1)
-                # 获取该索引对应的file_source
-                file_source = raw_data.iloc[mid_idx]["file_source"]
+                # 获取该索引对应的file_source，如果不存在则使用"unknown"
+                file_source = raw_data.iloc[mid_idx].get("file_source", "unknown")
                 window_to_file.append(file_source)
 
             # 创建DataFrame统计
-            stats_df = pd.DataFrame({
-                "file_source": window_to_file,
-                "label": labels
-            })
+            stats_df = pd.DataFrame({"file_source": window_to_file, "label": labels})
 
             # 计算每个文件中各行为类别的数量
-            behavior_counts = stats_df.groupby(["file_source", "label"]).size().unstack(fill_value=0)
+            behavior_counts = (
+                stats_df.groupby(["file_source", "label"]).size().unstack(fill_value=0)
+            )
 
             # 计算每个文件的总窗口数
             file_totals = behavior_counts.sum(axis=1)
@@ -231,14 +305,16 @@ class ReportGenerator:
             behavior_percentages = behavior_counts.div(file_totals, axis=0) * 100
 
             # 生成Markdown表格
-            file_behavior_stats = self._generate_file_stats_table(behavior_counts, behavior_percentages, file_totals)
+            file_behavior_stats = self._generate_file_stats_table(
+                behavior_counts, behavior_percentages, file_totals
+            )
         return file_behavior_stats
 
     def _generate_file_stats_table(
         self,
         behavior_counts: pd.DataFrame,
         behavior_percentages: pd.DataFrame,
-        file_totals: pd.Series
+        file_totals: pd.Series,
     ) -> str:
         """生成文件统计表格"""
         file_behavior_stats = "## 8. 不同文件行为类别占比统计\n\n"
@@ -246,7 +322,9 @@ class ReportGenerator:
         # 添加行为类别列
         sorted_behavior_ids = sorted(behavior_counts.columns)
         for behavior_id in sorted_behavior_ids:
-            behavior_name = BEHAVIOR_CATEGORY_MAP.get(behavior_id, f"行为 {behavior_id}")
+            behavior_name = BEHAVIOR_CATEGORY_MAP.get(
+                behavior_id, f"行为 {behavior_id}"
+            )
             file_behavior_stats += f"{behavior_name} (%) | "
         file_behavior_stats = file_behavior_stats.rstrip(" | ") + "|\n"
 
@@ -283,19 +361,18 @@ class ReportGenerator:
         # 直接访问separation_metrics中的特征均值
         if "label_means" in separation_metrics:
             # 从label_means字段获取数据
-            table_rows.extend(self._generate_rows_from_label_means(
-                separation_metrics["label_means"], feature_names
-            ))
-        elif "behavior_means" in separation_metrics:
-            # 兼容旧格式，从behavior_means字段获取数据
-            table_rows.extend(self._generate_rows_from_behavior_means(
-                separation_metrics["behavior_means"], feature_names
-            ))
+            table_rows.extend(
+                self._generate_rows_from_label_means(
+                    separation_metrics["label_means"], feature_names
+                )
+            )
         else:
             # 否则遍历所有行为
-            table_rows.extend(self._generate_rows_from_other_formats(
-                separation_metrics, feature_names
-            ))
+            table_rows.extend(
+                self._generate_rows_from_other_formats(
+                    separation_metrics, feature_names
+                )
+            )
 
         return "\n".join(table_rows)
 
@@ -339,7 +416,9 @@ class ReportGenerator:
             if isinstance(metrics, dict):
                 logger.debug(f"行为 {behavior} 的metrics结构: {list(metrics.keys())}")
                 # 尝试不同的键名
-                row = self._generate_row_from_metrics_dict(behavior, metrics, feature_names)
+                row = self._generate_row_from_metrics_dict(
+                    behavior, metrics, feature_names
+                )
                 if row:
                     rows.append(row)
         return rows
@@ -353,15 +432,22 @@ class ReportGenerator:
 
         if "mean" in metrics:
             # 提取特征均值，保留4位小数
-            feature_means = [f"{metrics['mean'][i]:.4f}" for i in range(len(feature_names))]
+            feature_means = [
+                f"{metrics['mean'][i]:.4f}" for i in range(len(feature_names))
+            ]
             return "| {0} | {1} |".format(behavior_name, " | ".join(feature_means))
         elif "means" in metrics:
             # 尝试means键
-            feature_means = [f"{metrics['means'][i]:.4f}" for i in range(len(feature_names))]
+            feature_means = [
+                f"{metrics['means'][i]:.4f}" for i in range(len(feature_names))
+            ]
             return "| {0} | {1} |".format(behavior_name, " | ".join(feature_means))
         elif isinstance(metrics, (list, np.ndarray)):
             # 如果metrics是列表或数组，直接使用
-            feature_means = [f"{metrics[i]:.4f}" for i in range(min(len(metrics), len(feature_names)))]
+            feature_means = [
+                f"{metrics[i]:.4f}"
+                for i in range(min(len(metrics), len(feature_names)))
+            ]
             # 补全缺失的特征
             while len(feature_means) < len(feature_names):
                 feature_means.append("-")
@@ -374,7 +460,7 @@ class ReportGenerator:
         method: str,
         feature_names: List[str],
         file_behavior_stats: str,
-        timeline_content: str
+        timeline_content: str,
     ) -> str:
         """生成Markdown内容"""
         return f"""# 网络行为模式发现报告
@@ -470,13 +556,15 @@ class ReportGenerator:
         feature_names: List[str],
         raw_data: pd.DataFrame = None,
         features_df: pd.DataFrame = None,
-        output_dir: Path = None
+        output_dir: Path = None,
     ) -> None:
         """生成综合HTML报告"""
         method = results["method"]
 
         # 先生成Markdown报告
-        self.generate_markdown_report(results, X, feature_names, raw_data, features_df, output_dir)
+        self.generate_markdown_report(
+            results, X, feature_names, raw_data, features_df, output_dir
+        )
 
         # 使用配置的报告目录作为上一层目录
         # 确保可视化目录结构正确
@@ -543,7 +631,7 @@ class ReportGenerator:
     def _generate_full_html(self, html_content: str, method_name: str) -> str:
         """生成完整的HTML内容"""
         # 使用传统字符串替换方式，避免ruff误将CSS属性识别为Python变量
-        html_template = '''
+        html_template = """
         <!DOCTYPE html>
         <html lang="zh-CN">
         <head>
@@ -707,10 +795,10 @@ class ReportGenerator:
             </div>
         </body>
         </html>
-        '''
+        """
 
         # 替换占位符
-        html_template = html_template.replace('METHOD_NAME', method_name)
-        html_template = html_template.replace('HTML_CONTENT', html_content)
+        html_template = html_template.replace("METHOD_NAME", method_name)
+        html_template = html_template.replace("HTML_CONTENT", html_content)
 
         return html_template

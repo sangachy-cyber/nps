@@ -21,8 +21,10 @@ def sample_generated_data():
     timestamps = pd.date_range(start="2025-01-01", periods=1000, freq="100ms")
     data = {
         "timestamp": timestamps,
-        "delay": np.random.randn(1000) * 10 + 20,  # 均值20，标准差10
-        "loss_rate": np.random.choice([0.0, 0.5, 1.0], 1000),
+        "delay1": np.random.randn(1000) * 10 + 20,  # 上行：均值20，标准差10
+        "delay2": np.random.randn(1000) * 10 + 25,  # 下行：均值25，标准差10
+        "loss_rate1": np.random.choice([0.0, 0.5, 1.0], 1000),  # 上行丢包率
+        "loss_rate2": np.random.choice([0.0, 0.5, 1.0], 1000),  # 下行丢包率
     }
     return pd.DataFrame(data)
 
@@ -54,11 +56,7 @@ def sample_labels():
 def sample_transition_matrix():
     """创建测试转移矩阵"""
     # 3x3的转移矩阵
-    return np.array([
-        [0.8, 0.1, 0.1],
-        [0.2, 0.6, 0.2],
-        [0.1, 0.3, 0.6]
-    ])
+    return np.array([[0.8, 0.1, 0.1], [0.2, 0.6, 0.2], [0.1, 0.3, 0.6]])
 
 
 @pytest.fixture
@@ -74,7 +72,7 @@ def test_evaluator_initialization(evaluator):
     assert evaluator is not None
     assert evaluator.time_granularity == 0.1  # 默认100ms
     assert isinstance(evaluator.feature_columns, list)
-    assert len(evaluator.feature_columns) == 6
+    assert len(evaluator.feature_columns) == 12
 
 
 def test_load_data(evaluator, sample_csv_file, sample_generated_data):
@@ -85,10 +83,18 @@ def test_load_data(evaluator, sample_csv_file, sample_generated_data):
     # 验证数据加载结果
     assert isinstance(df, pd.DataFrame)
     assert len(df) == len(sample_generated_data)
-    assert list(df.columns) == ["timestamp", "delay", "loss_rate"]
+    assert list(df.columns) == [
+        "timestamp",
+        "delay1",
+        "delay2",
+        "loss_rate1",
+        "loss_rate2",
+    ]
     assert pd.api.types.is_datetime64_any_dtype(df["timestamp"])
-    assert pd.api.types.is_float_dtype(df["delay"])
-    assert pd.api.types.is_float_dtype(df["loss_rate"])
+    assert pd.api.types.is_float_dtype(df["delay1"])
+    assert pd.api.types.is_float_dtype(df["delay2"])
+    assert pd.api.types.is_float_dtype(df["loss_rate1"])
+    assert pd.api.types.is_float_dtype(df["loss_rate2"])
 
 
 def test_evaluate(evaluator, sample_generated_data):
@@ -104,10 +110,14 @@ def test_evaluate(evaluator, sample_generated_data):
 
     # 验证统计保真度评估结果
     assert isinstance(results["statistical_fidelity"], dict)
-    assert "delay_mean" in results["statistical_fidelity"]
-    assert "delay_std" in results["statistical_fidelity"]
-    assert "loss_rate_mean" in results["statistical_fidelity"]
-    assert "loss_rate_std" in results["statistical_fidelity"]
+    assert "delay1_mean" in results["statistical_fidelity"]
+    assert "delay1_std" in results["statistical_fidelity"]
+    assert "delay2_mean" in results["statistical_fidelity"]
+    assert "delay2_std" in results["statistical_fidelity"]
+    assert "loss_rate1_mean" in results["statistical_fidelity"]
+    assert "loss_rate1_std" in results["statistical_fidelity"]
+    assert "loss_rate2_mean" in results["statistical_fidelity"]
+    assert "loss_rate2_std" in results["statistical_fidelity"]
 
     # 验证不可区分性评估结果
     assert isinstance(results["indistinguishability"], dict)
@@ -116,17 +126,21 @@ def test_evaluate(evaluator, sample_generated_data):
 
     # 验证动态合理性评估结果
     assert isinstance(results["dynamic_rationality"], dict)
-    assert "delay_acf_5" in results["dynamic_rationality"]
-    assert "burst_statistics" in results["dynamic_rationality"]
+    assert "delay1_acf_5" in results["dynamic_rationality"]
+    assert "delay2_acf_5" in results["dynamic_rationality"]
+    assert "burst_statistics1" in results["dynamic_rationality"]
+    assert "burst_statistics2" in results["dynamic_rationality"]
 
     # 验证突发统计结果
-    burst_stats = results["dynamic_rationality"]["burst_statistics"]
-    assert "num_bursts" in burst_stats
-    assert "avg_burst_duration" in burst_stats
-    assert "burst_frequency" in burst_stats
+    burst_stats1 = results["dynamic_rationality"]["burst_statistics1"]
+    assert "num_bursts" in burst_stats1
+    assert "avg_burst_duration" in burst_stats1
+    assert "burst_frequency" in burst_stats1
 
-
-
+    burst_stats2 = results["dynamic_rationality"]["burst_statistics2"]
+    assert "num_bursts" in burst_stats2
+    assert "avg_burst_duration" in burst_stats2
+    assert "burst_frequency" in burst_stats2
 
 
 def test_evaluate_transition_quality(evaluator, sample_transition_matrix):
@@ -202,7 +216,9 @@ def test_calculate_burst_statistics(evaluator):
 
     # 验证具体数值
     assert burst_stats["num_bursts"] == 3  # 3个突发
-    assert burst_stats["avg_burst_duration"] == (2 + 1 + 3) * 0.1 / 3  # 平均突发持续时间
+    assert (
+        burst_stats["avg_burst_duration"] == (2 + 1 + 3) * 0.1 / 3
+    )  # 平均突发持续时间
 
 
 def test_save_evaluation_results(evaluator, sample_generated_data, tmp_output_dir):
@@ -231,10 +247,14 @@ def test_save_with_visualization(evaluator, sample_generated_data, tmp_output_di
     X = np.random.rand(100, 6)  # 100个样本，6个特征
     labels = np.random.randint(0, 3, 100)  # 3个行为类别
     transition_matrix = np.random.rand(3, 3)  # 3x3转移矩阵
-    transition_matrix = transition_matrix / transition_matrix.sum(axis=1, keepdims=True)  # 归一化
+    transition_matrix = transition_matrix / transition_matrix.sum(
+        axis=1, keepdims=True
+    )  # 归一化
 
     # 保存结果和可视化
-    evaluator.save_with_visualization(results, tmp_output_dir, X, labels, transition_matrix)
+    evaluator.save_with_visualization(
+        results, tmp_output_dir, X, labels, transition_matrix
+    )
 
     # 验证文件存在
     json_path = tmp_output_dir / "evaluation_results.json"
@@ -256,7 +276,9 @@ def test_save_with_visualization(evaluator, sample_generated_data, tmp_output_di
 def test_evaluate_with_empty_data(evaluator):
     """测试评估空数据"""
     # 创建空数据框
-    empty_df = pd.DataFrame(columns=["timestamp", "delay", "loss_rate"])
+    empty_df = pd.DataFrame(
+        columns=["timestamp", "delay1", "delay2", "loss_rate1", "loss_rate2"]
+    )
 
     # 评估空数据
     results = evaluator.evaluate(empty_df)

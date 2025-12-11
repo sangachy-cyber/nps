@@ -7,7 +7,7 @@ import pytest
 import torch
 from src.network_simulation.condition_generation.diffusion_model import (
     ConditionDiffusionModel,
-    UNet,
+    CausalDilatedNet,
     UNetBlock,
     Time2Vec,
     CausalDilatedConv,
@@ -27,6 +27,7 @@ def diffusion_model(device):
         input_dim=4,
         behavior_embed_dim=32,
         T=1000,
+        cond_dim=32,  # 添加条件维度参数
     )
     model.to(device)
     model.eval()
@@ -79,14 +80,14 @@ def test_unet_block_forward():
     assert output.shape == (1, 128, 100)
 
 
-def test_unet_forward(sample_input, device):
-    """测试 UNet 前向传播"""
+def test_causal_dilated_net_forward(sample_input, device):
+    """测试 CausalDilatedNet 前向传播"""
     x, t, condition_vector = sample_input
 
-    unet = UNet(input_dim=4, behavior_embed_dim=32)
-    unet.to(device)
+    cdn = CausalDilatedNet(input_dim=4, behavior_embed_dim=32)
+    cdn.to(device)
 
-    output = unet(x, t, condition_vector)
+    output = cdn(x, t, condition_vector)
     assert output.shape == x.shape
 
 

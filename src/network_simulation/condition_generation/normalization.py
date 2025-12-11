@@ -21,96 +21,188 @@ class Normalizer:
     """
 
     def __init__(self, valid_loss_up: list = None, valid_loss_down: list = None):
-        """
-        初始化归一化器
+        """初始化归一化器
 
         Args:
-            valid_loss_up: 上行合法丢包值列表，默认为[0.0, 1/3, 0.5, 2/3, 1.0]
-            valid_loss_down: 下行合法丢包值列表，默认为[0.0, 1/3, 0.5, 2/3, 1.0]
+            valid_loss_up (list, optional): 上行合法丢包值列表，默认为[0.0, 1/3, 0.5, 2/3, 1.0]
+            valid_loss_down (list, optional): 下行合法丢包值列表，默认为[0.0, 1/3, 0.5, 2/3, 1.0]
+
+        Examples:
+            >>> from network_simulation.condition_generation.normalization import Normalizer
+            >>> # 方式1：使用默认合法丢包值
+            >>> normalizer = Normalizer()
+            >>> # 方式2：自定义合法丢包值
+            >>> normalizer = Normalizer(
+            ...     valid_loss_up=[0.0, 0.1, 0.5, 1.0],
+            ...     valid_loss_down=[0.0, 0.2, 0.7, 1.0]
+            ... )
         """
-        self.valid_loss_up = valid_loss_up or [0.0, 1/3, 0.5, 2/3, 1.0]
-        self.valid_loss_down = valid_loss_down or [0.0, 1/3, 0.5, 2/3, 1.0]
+        self.valid_loss_up = valid_loss_up or [0.0, 1 / 3, 0.5, 2 / 3, 1.0]
+        self.valid_loss_down = valid_loss_down or [0.0, 1 / 3, 0.5, 2 / 3, 1.0]
 
         # 扩展归一化参数结构，支持上下行独立参数
         self.normalization_params = {
-            'delay_up': {},
-            'delay_down': {},
-            'loss_rate_up': {},
-            'loss_rate_down': {}
+            "delay_up": {},
+            "delay_down": {},
+            "loss_rate_up": {},
+            "loss_rate_down": {},
         }
-        logger.info(f"初始化归一化器，上行合法丢包值: {self.valid_loss_up}, 下行合法丢包值: {self.valid_loss_down}")
+        logger.info(
+            f"初始化归一化器，上行合法丢包值: {self.valid_loss_up}, 下行合法丢包值: {self.valid_loss_down}"
+        )
 
-    def normalize4d(self, delay1_values: np.ndarray, loss1_values: np.ndarray, delay2_values: np.ndarray, loss2_values: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        对上下行延迟和丢包率数据进行归一化处理（双流）
+    def normalize4d(
+        self,
+        delay1_values: np.ndarray,
+        loss1_values: np.ndarray,
+        delay2_values: np.ndarray,
+        loss2_values: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """对上下行延迟和丢包率数据进行归一化处理（双流）
 
         该方法用于将原始的上下行网络数据（延迟和丢包率）归一化到模型训练所需的范围。
         上行数据和下行数据分别使用独立的归一化参数，确保归一化的准确性。
 
         Args:
-            delay1_values: 上行原始延迟数据，shape (n_samples,)
-            loss1_values: 上行原始丢包率数据，shape (n_samples,)
-            delay2_values: 下行原始延迟数据，shape (n_samples,)
-            loss2_values: 下行原始丢包率数据，shape (n_samples,)
+            delay1_values (np.ndarray): 上行原始延迟数据，shape (n_samples,)
+            loss1_values (np.ndarray): 上行原始丢包率数据，shape (n_samples,)
+            delay2_values (np.ndarray): 下行原始延迟数据，shape (n_samples,)
+            loss2_values (np.ndarray): 下行原始丢包率数据，shape (n_samples,)
 
         Returns:
-            tuple: 包含四个元素的元组
+            tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: 包含四个元素的元组
                 - 归一化后的上行延迟数据，shape (n_samples,)
                 - 归一化后的上行丢包率数据，shape (n_samples,)
                 - 归一化后的下行延迟数据，shape (n_samples,)
                 - 归一化后的下行丢包率数据，shape (n_samples,)
+
+        Examples:
+            >>> from network_simulation.condition_generation.normalization import Normalizer
+            >>> import numpy as np
+            >>> normalizer = Normalizer(
+            ...     valid_loss_up=[0.0, 0.5, 1.0],
+            ...     valid_loss_down=[0.0, 0.5, 1.0]
+            ... )
+            >>> # 生成示例数据
+            >>> n_samples = 100
+            >>> delay1 = np.random.normal(50, 10, n_samples)
+            >>> loss1 = np.random.choice([0.0, 0.5, 1.0], n_samples)
+            >>> delay2 = np.random.normal(60, 15, n_samples)
+            >>> loss2 = np.random.choice([0.0, 0.5, 1.0], n_samples)
+            >>> # 归一化处理
+            >>> delay1_norm, loss1_norm, delay2_norm, loss2_norm = normalizer.normalize4d(delay1, loss1, delay2, loss2)
+            >>> print(f"归一化前上行延迟范围: {delay1.min():.2f} - {delay1.max():.2f}")
+            >>> print(f"归一化后上行延迟范围: {delay1_norm.min():.2f} - {delay1_norm.max():.2f}")
+            >>> print(f"归一化前上行丢包率范围: {loss1.min():.2f} - {loss1.max():.2f}")
+            >>> print(f"归一化后上行丢包率范围: {loss1_norm.min():.2f} - {loss1_norm.max():.2f}")
         """
-        logger.info(f"开始归一化双流数据，延迟1形状: {delay1_values.shape}, 丢包率1形状: {loss1_values.shape}, 延迟2形状: {delay2_values.shape}, 丢包率2形状: {loss2_values.shape}")
+        logger.info(
+            f"开始归一化双流数据，延迟1形状: {delay1_values.shape}, 丢包率1形状: {loss1_values.shape}, 延迟2形状: {delay2_values.shape}, 丢包率2形状: {loss2_values.shape}"
+        )
 
         # 归一化上行数据
-        delay1_norm, delay1_params = self.normalize_delay(delay1_values, use_log_transform=True, direction='up')
-        loss1_norm, loss1_params = self.normalize_loss_rate(loss1_values, self.valid_loss_up, direction='up')
-        self.normalization_params['delay_up'] = delay1_params
-        self.normalization_params['loss_rate_up'] = loss1_params
+        delay1_norm, delay1_params = self.normalize_delay(delay1_values, direction="up")
+        loss1_norm, loss1_params = self.normalize_loss_rate(
+            loss1_values, self.valid_loss_up, direction="up"
+        )
+        self.normalization_params["delay_up"] = delay1_params
+        self.normalization_params["loss_rate_up"] = loss1_params
 
         # 归一化下行数据
-        delay2_norm, delay2_params = self.normalize_delay(delay2_values, use_log_transform=True, direction='down')
-        loss2_norm, loss2_params = self.normalize_loss_rate(loss2_values, self.valid_loss_down, direction='down')
-        self.normalization_params['delay_down'] = delay2_params
-        self.normalization_params['loss_rate_down'] = loss2_params
+        delay2_norm, delay2_params = self.normalize_delay(
+            delay2_values, direction="down"
+        )
+        loss2_norm, loss2_params = self.normalize_loss_rate(
+            loss2_values, self.valid_loss_down, direction="down"
+        )
+        self.normalization_params["delay_down"] = delay2_params
+        self.normalization_params["loss_rate_down"] = loss2_params
 
         return delay1_norm, loss1_norm, delay2_norm, loss2_norm
 
-    def denormalize4d(self, delay1_norm: np.ndarray, loss1_norm: np.ndarray, delay2_norm: np.ndarray, loss2_norm: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        对归一化后的上下行延迟和丢包率数据进行反归一化处理（双流）
+    def denormalize4d(
+        self,
+        delay1_norm: np.ndarray,
+        loss1_norm: np.ndarray,
+        delay2_norm: np.ndarray,
+        loss2_norm: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """对归一化后的上下行延迟和丢包率数据进行反归一化处理（双流）
 
         Args:
-            delay1_norm: 归一化后的上行延迟数据，shape (n_samples,)
-            loss1_norm: 归一化后的上行丢包率数据，shape (n_samples,)
-            delay2_norm: 归一化后的下行延迟数据，shape (n_samples,)
-            loss2_norm: 归一化后的下行丢包率数据，shape (n_samples,)
+            delay1_norm (np.ndarray): 归一化后的上行延迟数据，shape (n_samples,)
+            loss1_norm (np.ndarray): 归一化后的上行丢包率数据，shape (n_samples,)
+            delay2_norm (np.ndarray): 归一化后的下行延迟数据，shape (n_samples,)
+            loss2_norm (np.ndarray): 归一化后的下行丢包率数据，shape (n_samples,)
 
         Returns:
-            tuple: 包含四个元素的元组
+            tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: 包含四个元素的元组
                 - 反归一化后的上行延迟数据，shape (n_samples,)
                 - 反归一化后的上行丢包率数据，shape (n_samples,)
                 - 反归一化后的下行延迟数据，shape (n_samples,)
                 - 反归一化后的下行丢包率数据，shape (n_samples,)
+
+        Examples:
+            >>> from network_simulation.condition_generation.normalization import Normalizer
+            >>> import numpy as np
+            >>> normalizer = Normalizer(
+            ...     valid_loss_up=[0.0, 0.5, 1.0],
+            ...     valid_loss_down=[0.0, 0.5, 1.0]
+            ... )
+            >>> # 生成示例数据并归一化
+            >>> n_samples = 100
+            >>> delay1 = np.random.normal(50, 10, n_samples)
+            >>> loss1 = np.random.choice([0.0, 0.5, 1.0], n_samples)
+            >>> delay2 = np.random.normal(60, 15, n_samples)
+            >>> loss2 = np.random.choice([0.0, 0.5, 1.0], n_samples)
+            >>> delay1_norm, loss1_norm, delay2_norm, loss2_norm = normalizer.normalize4d(delay1, loss1, delay2, loss2)
+            >>> # 反归一化
+            >>> delay1_denorm, loss1_denorm, delay2_denorm, loss2_denorm = normalizer.denormalize4d(delay1_norm, loss1_norm, delay2_norm, loss2_norm)
+            >>> print(f"反归一化后上行延迟范围: {delay1_denorm.min():.2f} - {delay1_denorm.max():.2f}")
+            >>> print(f"反归一化后上行丢包率值: {np.unique(loss1_denorm)}")
         """
-        logger.info(f"开始反归一化双流数据，延迟1形状: {delay1_norm.shape}, 丢包率1形状: {loss1_norm.shape}, 延迟2形状: {delay2_norm.shape}, 丢包率2形状: {loss2_norm.shape}")
+        logger.info(
+            f"开始反归一化双流数据，延迟1形状: {delay1_norm.shape}, 丢包率1形状: {loss1_norm.shape}, 延迟2形状: {delay2_norm.shape}, 丢包率2形状: {loss2_norm.shape}"
+        )
 
         # 反归一化上行数据
-        delay1 = self.denormalize_delay(delay1_norm, self.normalization_params['delay_up'])
-        loss1 = self.denormalize_loss_rate(loss1_norm, self.normalization_params['loss_rate_up'])
+        delay1 = self.denormalize_delay(
+            delay1_norm, self.normalization_params["delay_up"]
+        )
+        loss1 = self.denormalize_loss_rate(
+            loss1_norm, self.normalization_params["loss_rate_up"]
+        )
 
         # 反归一化下行数据
-        delay2 = self.denormalize_delay(delay2_norm, self.normalization_params['delay_down'])
-        loss2 = self.denormalize_loss_rate(loss2_norm, self.normalization_params['loss_rate_down'])
+        delay2 = self.denormalize_delay(
+            delay2_norm, self.normalization_params["delay_down"]
+        )
+        loss2 = self.denormalize_loss_rate(
+            loss2_norm, self.normalization_params["loss_rate_down"]
+        )
 
         return delay1, loss1, delay2, loss2
 
     def save_params(self, filepath: Path or str):
-        """
-        保存归一化参数到文件
+        """保存归一化参数到文件
 
         Args:
-            filepath: 保存路径
+            filepath (Path or str): 保存路径，可以是Path对象或字符串
+
+        Examples:
+            >>> from network_simulation.condition_generation.normalization import Normalizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> normalizer = Normalizer()
+            >>> # 生成示例数据并归一化，以获取归一化参数
+            >>> n_samples = 100
+            >>> delay1 = np.random.normal(50, 10, n_samples)
+            >>> loss1 = np.random.choice([0.0, 0.5, 1.0], n_samples)
+            >>> delay2 = np.random.normal(60, 15, n_samples)
+            >>> loss2 = np.random.choice([0.0, 0.5, 1.0], n_samples)
+            >>> normalizer.normalize4d(delay1, loss1, delay2, loss2)
+            >>> # 保存归一化参数
+            >>> normalizer.save_params(Path("normalization_params.json"))
         """
         logger.info(f"保存归一化参数到: {filepath}")
 
@@ -125,22 +217,28 @@ class Normalizer:
                     params_to_save[key][param_key] = param_value
 
         # 保存到JSON文件
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(params_to_save, f, indent=2)
 
         logger.info(f"归一化参数已保存到: {filepath}")
 
     def load_params(self, filepath: Path or str):
-        """
-        从文件加载归一化参数
+        """从文件加载归一化参数
 
         Args:
-            filepath: 加载路径
+            filepath (Path or str): 加载路径，可以是Path对象或字符串
+
+        Examples:
+            >>> from network_simulation.condition_generation.normalization import Normalizer
+            >>> from pathlib import Path
+            >>> normalizer = Normalizer()
+            >>> # 假设已经保存了归一化参数文件
+            >>> # normalizer.load_params(Path("normalization_params.json"))
         """
         logger.info(f"从文件加载归一化参数: {filepath}")
 
         # 从JSON文件加载
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             params_loaded = json.load(f)
 
         # 转换列表为numpy数组
@@ -155,148 +253,167 @@ class Normalizer:
         logger.info(f"归一化参数已加载: {filepath}")
 
     def from_checkpoint(self, checkpoint: dict):
-        """
-        从模型检查点加载归一化参数
+        """从模型检查点加载归一化参数
 
         Args:
-            checkpoint: 模型检查点字典
+            checkpoint (dict): 模型检查点字典，包含归一化参数
+
+        Examples:
+            >>> from network_simulation.condition_generation.normalization import Normalizer
+            >>> import torch
+            >>> normalizer = Normalizer()
+            >>> # 假设已经有一个模型检查点
+            >>> # checkpoint = torch.load("model_checkpoint.pt")
+            >>> # normalizer.from_checkpoint(checkpoint)
         """
         logger.info("从模型检查点加载归一化参数")
 
-        # 检查是否有上下行独立的参数
-        has_separate_params = 'delay_up_scaler_center_' in checkpoint
+        # 加载上行延迟归一化参数
+        delay_up_params = {
+            "normalization_method": checkpoint.get("normalization_method", "robust"),
+            "delay_scaler_center_": checkpoint.get(
+                "delay_up_scaler_center_", np.array([0.0])
+            ),
+            "delay_scaler_scale_": checkpoint.get(
+                "delay_up_scaler_scale_", np.array([1.0])
+            ),
+            "robust_scale_min": checkpoint.get("delay_up_robust_scale_min", 0.0),
+            "robust_scale_max": checkpoint.get("delay_up_robust_scale_max", 0.0),
+            "clipped_min": checkpoint.get("delay_up_clipped_min", -1.0),
+            "clipped_max": checkpoint.get("delay_up_clipped_max", 1.0),
+            "original_min": checkpoint.get("original_min", 0.0),
+        }
+        self.normalization_params["delay_up"] = delay_up_params
 
-        if has_separate_params:
-            # 加载上行延迟归一化参数
-            delay_up_params = {
-                'normalization_method': checkpoint.get('normalization_method', 'robust'),
-                'delay_scaler_center_': checkpoint.get('delay_up_scaler_center_', np.array([0.0])),
-                'delay_scaler_scale_': checkpoint.get('delay_up_scaler_scale_', np.array([1.0])),
-                'robust_scale_min': checkpoint.get('delay_up_robust_scale_min', 0.0),
-                'robust_scale_max': checkpoint.get('delay_up_robust_scale_max', 0.0),
-                'clipped_min': checkpoint.get('delay_up_clipped_min', -1.0),
-                'clipped_max': checkpoint.get('delay_up_clipped_max', 1.0),
-                'original_min': checkpoint.get('original_min', 0.0),
-                'use_log_transform': checkpoint.get('use_log_transform', False)
-            }
-            self.normalization_params['delay_up'] = delay_up_params
+        # 加载下行延迟归一化参数
+        delay_down_params = {
+            "normalization_method": checkpoint.get("normalization_method", "robust"),
+            "delay_scaler_center_": checkpoint.get(
+                "delay_down_scaler_center_", np.array([0.0])
+            ),
+            "delay_scaler_scale_": checkpoint.get(
+                "delay_down_scaler_scale_", np.array([1.0])
+            ),
+            "robust_scale_min": checkpoint.get("delay_down_robust_scale_min", 0.0),
+            "robust_scale_max": checkpoint.get("delay_down_robust_scale_max", 0.0),
+            "clipped_min": checkpoint.get("delay_down_clipped_min", -1.0),
+            "clipped_max": checkpoint.get("delay_down_clipped_max", 1.0),
+            "original_min": checkpoint.get("original_min", 0.0),
+        }
+        self.normalization_params["delay_down"] = delay_down_params
 
-            # 加载下行延迟归一化参数
-            delay_down_params = {
-                'normalization_method': checkpoint.get('normalization_method', 'robust'),
-                'delay_scaler_center_': checkpoint.get('delay_down_scaler_center_', np.array([0.0])),
-                'delay_scaler_scale_': checkpoint.get('delay_down_scaler_scale_', np.array([1.0])),
-                'robust_scale_min': checkpoint.get('delay_down_robust_scale_min', 0.0),
-                'robust_scale_max': checkpoint.get('delay_down_robust_scale_max', 0.0),
-                'clipped_min': checkpoint.get('delay_down_clipped_min', -1.0),
-                'clipped_max': checkpoint.get('delay_down_clipped_max', 1.0),
-                'original_min': checkpoint.get('original_min', 0.0),
-                'use_log_transform': checkpoint.get('use_log_transform', False)
-            }
-            self.normalization_params['delay_down'] = delay_down_params
+        # 加载上行丢包率归一化参数
+        valid_loss_up = checkpoint.get("valid_loss_values_up", self.valid_loss_up)
+        loss_up_params = {
+            "loss_rate_mapping": checkpoint.get("loss_rate_mapping_up", {}),
+            "valid_loss_values": valid_loss_up,
+        }
+        self.normalization_params["loss_rate_up"] = loss_up_params
 
-            # 加载上行丢包率归一化参数
-            valid_loss_up = checkpoint.get('valid_loss_values_up', self.valid_loss_up)
-            loss_up_params = {
-                'loss_rate_mapping': checkpoint.get('loss_rate_mapping_up', {}),
-                'valid_loss_values': valid_loss_up
-            }
-            self.normalization_params['loss_rate_up'] = loss_up_params
+        # 加载下行丢包率归一化参数
+        valid_loss_down = checkpoint.get("valid_loss_values_down", self.valid_loss_down)
+        loss_down_params = {
+            "loss_rate_mapping": checkpoint.get("loss_rate_mapping_down", {}),
+            "valid_loss_values": valid_loss_down,
+        }
+        self.normalization_params["loss_rate_down"] = loss_down_params
 
-            # 加载下行丢包率归一化参数
-            valid_loss_down = checkpoint.get('valid_loss_values_down', self.valid_loss_down)
-            loss_down_params = {
-                'loss_rate_mapping': checkpoint.get('loss_rate_mapping_down', {}),
-                'valid_loss_values': valid_loss_down
-            }
-            self.normalization_params['loss_rate_down'] = loss_down_params
-
-            # 更新实例的valid_loss值
-            self.valid_loss_up = valid_loss_up
-            self.valid_loss_down = valid_loss_down
-        else:
-            # 兼容旧版本，将单流参数复制到上下行
-            delay_params = {
-                'normalization_method': checkpoint.get('normalization_method', 'robust'),
-                'delay_scaler_center_': checkpoint.get('delay_scaler_center_', np.array([0.0])),
-                'delay_scaler_scale_': checkpoint.get('delay_scaler_scale_', np.array([1.0])),
-                'robust_scale_min': checkpoint.get('robust_scale_min', 0.0),
-                'robust_scale_max': checkpoint.get('robust_scale_max', 0.0),
-                'clipped_min': checkpoint.get('clipped_min', -1.0),
-                'clipped_max': checkpoint.get('clipped_max', 1.0),
-                'original_min': checkpoint.get('original_min', 0.0),
-                'use_log_transform': checkpoint.get('use_log_transform', False)
-            }
-            self.normalization_params['delay_up'] = delay_params
-            self.normalization_params['delay_down'] = delay_params.copy()
-
-            # 加载丢包率归一化参数
-            valid_loss = checkpoint.get('valid_loss_values', self.valid_loss_up)
-            loss_params = {
-                'loss_rate_mapping': checkpoint.get('loss_rate_mapping', {}),
-                'valid_loss_values': valid_loss
-            }
-            self.normalization_params['loss_rate_up'] = loss_params
-            self.normalization_params['loss_rate_down'] = loss_params.copy()
-
-            # 更新实例的valid_loss值
-            self.valid_loss_up = valid_loss
-            self.valid_loss_down = valid_loss
+        # 更新实例的valid_loss值
+        self.valid_loss_up = valid_loss_up
+        self.valid_loss_down = valid_loss_down
 
         logger.info("归一化参数已从检查点加载")
 
     def to_checkpoint(self) -> dict:
-        """
-        将归一化参数转换为模型检查点格式
+        """将归一化参数转换为模型检查点格式
 
         Returns:
             dict: 归一化参数字典，可直接用于模型检查点
+
+        Examples:
+            >>> from network_simulation.condition_generation.normalization import Normalizer
+            >>> import torch
+            >>> normalizer = Normalizer()
+            >>> # 生成示例数据并归一化，以获取归一化参数
+            >>> import numpy as np
+            >>> n_samples = 100
+            >>> delay1 = np.random.normal(50, 10, n_samples)
+            >>> loss1 = np.random.choice([0.0, 0.5, 1.0], n_samples)
+            >>> delay2 = np.random.normal(60, 15, n_samples)
+            >>> loss2 = np.random.choice([0.0, 0.5, 1.0], n_samples)
+            >>> normalizer.normalize4d(delay1, loss1, delay2, loss2)
+            >>> # 转换为检查点格式
+            >>> checkpoint_params = normalizer.to_checkpoint()
+            >>> # 可以将这些参数添加到模型检查点中
+            >>> # model_checkpoint = torch.load("model_checkpoint.pt")
+            >>> # model_checkpoint.update(checkpoint_params)
+            >>> # torch.save(model_checkpoint, "model_checkpoint_with_norm.pt")
         """
         logger.info("将归一化参数转换为模型检查点格式")
 
         # 获取上下行延迟参数
-        delay_up_params = self.normalization_params.get('delay_up', {})
-        delay_down_params = self.normalization_params.get('delay_down', {})
-        loss_rate_up_params = self.normalization_params.get('loss_rate_up', {})
-        loss_rate_down_params = self.normalization_params.get('loss_rate_down', {})
+        delay_up_params = self.normalization_params.get("delay_up", {})
+        delay_down_params = self.normalization_params.get("delay_down", {})
+        loss_rate_up_params = self.normalization_params.get("loss_rate_up", {})
+        loss_rate_down_params = self.normalization_params.get("loss_rate_down", {})
 
         checkpoint = {
             # 上行延迟归一化参数
-            'delay_up_scaler_center_': delay_up_params.get('delay_scaler_center_', np.array([0.0])),
-            'delay_up_scaler_scale_': delay_up_params.get('delay_scaler_scale_', np.array([1.0])),
-            'delay_up_robust_scale_min': delay_up_params.get('robust_scale_min', 0.0),
-            'delay_up_robust_scale_max': delay_up_params.get('robust_scale_max', 0.0),
-            'delay_up_clipped_min': delay_up_params.get('clipped_min', -1.0),
-            'delay_up_clipped_max': delay_up_params.get('clipped_max', 1.0),
+            "delay_up_scaler_center_": delay_up_params.get(
+                "delay_scaler_center_", np.array([0.0])
+            ),
+            "delay_up_scaler_scale_": delay_up_params.get(
+                "delay_scaler_scale_", np.array([1.0])
+            ),
+            "delay_up_robust_scale_min": delay_up_params.get("robust_scale_min", 0.0),
+            "delay_up_robust_scale_max": delay_up_params.get("robust_scale_max", 0.0),
+            "delay_up_clipped_min": delay_up_params.get("clipped_min", -1.0),
+            "delay_up_clipped_max": delay_up_params.get("clipped_max", 1.0),
             # 下行延迟归一化参数
-            'delay_down_scaler_center_': delay_down_params.get('delay_scaler_center_', np.array([0.0])),
-            'delay_down_scaler_scale_': delay_down_params.get('delay_scaler_scale_', np.array([1.0])),
-            'delay_down_robust_scale_min': delay_down_params.get('robust_scale_min', 0.0),
-            'delay_down_robust_scale_max': delay_down_params.get('robust_scale_max', 0.0),
-            'delay_down_clipped_min': delay_down_params.get('clipped_min', -1.0),
-            'delay_down_clipped_max': delay_down_params.get('clipped_max', 1.0),
+            "delay_down_scaler_center_": delay_down_params.get(
+                "delay_scaler_center_", np.array([0.0])
+            ),
+            "delay_down_scaler_scale_": delay_down_params.get(
+                "delay_scaler_scale_", np.array([1.0])
+            ),
+            "delay_down_robust_scale_min": delay_down_params.get(
+                "robust_scale_min", 0.0
+            ),
+            "delay_down_robust_scale_max": delay_down_params.get(
+                "robust_scale_max", 0.0
+            ),
+            "delay_down_clipped_min": delay_down_params.get("clipped_min", -1.0),
+            "delay_down_clipped_max": delay_down_params.get("clipped_max", 1.0),
             # 通用延迟参数
-            'normalization_method': delay_up_params.get('normalization_method', 'robust'),
-            'original_min': delay_up_params.get('original_min', 0.0),
-            'use_log_transform': delay_up_params.get('use_log_transform', False),
+            "normalization_method": delay_up_params.get(
+                "normalization_method", "robust"
+            ),
+            "original_min": delay_up_params.get("original_min", 0.0),
             # 上行丢包率归一化参数
-            'loss_rate_mapping_up': loss_rate_up_params.get('loss_rate_mapping', {}),
-            'valid_loss_values_up': loss_rate_up_params.get('valid_loss_values', self.valid_loss_up),
+            "loss_rate_mapping_up": loss_rate_up_params.get("loss_rate_mapping", {}),
+            "valid_loss_values_up": loss_rate_up_params.get(
+                "valid_loss_values", self.valid_loss_up
+            ),
             # 下行丢包率归一化参数
-            'loss_rate_mapping_down': loss_rate_down_params.get('loss_rate_mapping', {}),
-            'valid_loss_values_down': loss_rate_down_params.get('valid_loss_values', self.valid_loss_down)
+            "loss_rate_mapping_down": loss_rate_down_params.get(
+                "loss_rate_mapping", {}
+            ),
+            "valid_loss_values_down": loss_rate_down_params.get(
+                "valid_loss_values", self.valid_loss_down
+            ),
         }
 
         logger.info("归一化参数已转换为检查点格式")
         return checkpoint
 
-    def normalize_delay(self, delay_values: np.ndarray, use_log_transform: bool = True, direction: str = 'up') -> tuple[np.ndarray, dict]:
+    def normalize_delay(
+        self, delay_values: np.ndarray, direction: str = "up"
+    ) -> tuple[np.ndarray, dict]:
         """
         对延迟数据进行归一化处理
 
         Args:
             delay_values: 原始延迟数据，shape (n_samples,)
-            use_log_transform: 是否使用对数变换，默认为True
             direction: 数据方向，'up' 表示上行，'down' 表示下行
 
         Returns:
@@ -304,8 +421,10 @@ class Normalizer:
                 - 归一化后的延迟数据，shape (n_samples,)
                 - 归一化参数字典，包含归一化方法、变换参数等
         """
-        logger.info(f"开始归一化{direction}行延迟数据，输入形状: {delay_values.shape}, use_log_transform: {use_log_transform}")
-        logger.info(f"原始延迟数据统计 - 最小值: {np.min(delay_values):.4f}, 最大值: {np.max(delay_values):.4f}, 平均值: {np.mean(delay_values):.4f}, 标准差: {np.std(delay_values):.4f}")
+        logger.info(f"开始归一化{direction}行延迟数据，输入形状: {delay_values.shape}")
+        logger.info(
+            f"原始延迟数据统计 - 最小值: {np.min(delay_values):.4f}, 最大值: {np.max(delay_values):.4f}, 平均值: {np.mean(delay_values):.4f}, 标准差: {np.std(delay_values):.4f}"
+        )
 
         # 保存原始数据的最小值，用于反归一化
         original_min = np.min(delay_values)
@@ -315,33 +434,47 @@ class Normalizer:
 
         # 确保所有延迟值都大于等于0，避免对数变换时出现问题
         delay_values_copy = np.maximum(delay_values_copy, 0)
-        logger.info(f"确保延迟值非负后 - 最小值: {np.min(delay_values_copy):.4f}, 最大值: {np.max(delay_values_copy):.4f}, 平均值: {np.mean(delay_values_copy):.4f}, 标准差: {np.std(delay_values_copy):.4f}")
+        logger.info(
+            f"确保延迟值非负后 - 最小值: {np.min(delay_values_copy):.4f}, 最大值: {np.max(delay_values_copy):.4f}, 平均值: {np.mean(delay_values_copy):.4f}, 标准差: {np.std(delay_values_copy):.4f}"
+        )
 
         # 添加对数变换，减少数据偏斜
-        if use_log_transform:
-            # 加1避免log(0)
-            delay_values_copy = np.log(delay_values_copy + 1)
-            logger.info(f"对数变换后 - 最小值: {np.min(delay_values_copy):.4f}, 最大值: {np.max(delay_values_copy):.4f}, 平均值: {np.mean(delay_values_copy):.4f}, 标准差: {np.std(delay_values_copy):.4f}")
+        # 始终使用对数变换
+        # 加1避免log(0)
+        delay_values_copy = np.log(delay_values_copy + 1)
+        logger.info(
+            f"对数变换后 - 最小值: {np.min(delay_values_copy):.4f}, 最大值: {np.max(delay_values_copy):.4f}, 平均值: {np.mean(delay_values_copy):.4f}, 标准差: {np.std(delay_values_copy):.4f}"
+        )
 
         # RobustScaler归一化
         # 使用对数变换后的数据进行RobustScaler归一化
         # 使用合理的分位数范围(25, 75)，只考虑中间50%的数据，避免极端值影响
         delay_scaler = RobustScaler(quantile_range=(25, 75))  # 使用标准四分位距范围
-        delay_scaled = delay_scaler.fit_transform(delay_values_copy.reshape(-1, 1)).flatten()
+        delay_scaled = delay_scaler.fit_transform(
+            delay_values_copy.reshape(-1, 1)
+        ).flatten()
 
-        logger.info(f"RobustScaler处理后 - 最小值: {np.min(delay_scaled):.4f}, 最大值: {np.max(delay_scaled):.4f}, 平均值: {np.mean(delay_scaled):.4f}, 标准差: {np.std(delay_scaled):.4f}")
-        logger.info(f"RobustScaler参数 - 中心值: {delay_scaler.center_}, 缩放因子: {delay_scaler.scale_}")
+        logger.info(
+            f"RobustScaler处理后 - 最小值: {np.min(delay_scaled):.4f}, 最大值: {np.max(delay_scaled):.4f}, 平均值: {np.mean(delay_scaled):.4f}, 标准差: {np.std(delay_scaled):.4f}"
+        )
+        logger.info(
+            f"RobustScaler参数 - 中心值: {delay_scaler.center_}, 缩放因子: {delay_scaler.scale_}"
+        )
 
         # 计算当前归一化后的最小值和最大值
         current_min = np.min(delay_scaled)
         current_max = np.max(delay_scaled)
 
-        logger.info(f"RobustScaler输出范围 - 最小值: {current_min:.4f}, 最大值: {current_max:.4f}")
+        logger.info(
+            f"RobustScaler输出范围 - 最小值: {current_min:.4f}, 最大值: {current_max:.4f}"
+        )
 
         # 使用min-max缩放将RobustScaler输出缩放到[-1, 1]范围
         if current_max > current_min:
             # 将RobustScaler输出缩放到[-1, 1]范围
-            delay_norm = 2 * (delay_scaled - current_min) / (current_max - current_min) - 1
+            delay_norm = (
+                2 * (delay_scaled - current_min) / (current_max - current_min) - 1
+            )
 
             # 确保所有值在[-1, 1]范围内
             delay_norm = np.clip(delay_norm, -1, 1)
@@ -350,33 +483,42 @@ class Normalizer:
             current_min_clipped = np.min(delay_norm)
             current_max_clipped = np.max(delay_norm)
 
-            logger.info(f"使用min-max缩放归一化 - 原始范围: [{current_min:.4f}, {current_max:.4f}], 缩放到[-1, 1]")
+            logger.info(
+                f"使用min-max缩放归一化 - 原始范围: [{current_min:.4f}, {current_max:.4f}], 缩放到[-1, 1]"
+            )
         else:
             delay_norm = np.zeros_like(delay_scaled)
             # 设置默认的clipped值
             current_min_clipped = current_min
             current_max_clipped = current_max
 
-        logger.info(f"最终归一化后 - 最小值: {np.min(delay_norm):.4f}, 最大值: {np.max(delay_norm):.4f}, 平均值: {np.mean(delay_norm):.4f}, 标准差: {np.std(delay_norm):.4f}")
+        logger.info(
+            f"最终归一化后 - 最小值: {np.min(delay_norm):.4f}, 最大值: {np.max(delay_norm):.4f}, 平均值: {np.mean(delay_norm):.4f}, 标准差: {np.std(delay_norm):.4f}"
+        )
 
         # 保存归一化参数，包括clipped范围
         normalization_params = {
-            'normalization_method': 'robust',
-            'delay_scaler_center_': delay_scaler.center_,
-            'delay_scaler_scale_': delay_scaler.scale_,
-            'robust_scale_min': current_min,
-            'robust_scale_max': current_max,
-            'clipped_min': current_min_clipped,  # 保存截断后的最小值
-            'clipped_max': current_max_clipped,  # 保存截断后的最大值
-            'original_min': original_min,
-            'use_log_transform': use_log_transform
+            "normalization_method": "robust",
+            "delay_scaler_center_": delay_scaler.center_,
+            "delay_scaler_scale_": delay_scaler.scale_,
+            "robust_scale_min": current_min,
+            "robust_scale_max": current_max,
+            "clipped_min": current_min_clipped,  # 保存截断后的最小值
+            "clipped_max": current_max_clipped,  # 保存截断后的最大值
+            "original_min": original_min,
         }
 
         # 添加详细日志，用于调试
         logger.info("归一化后数据范围检查:")
-        logger.info(f"  截断前RobustScaler输出范围: [{current_min:.6f}, {current_max:.6f}]")
-        logger.info(f"  截断后范围: [{current_min_clipped:.6f}, {current_max_clipped:.6f}]")
-        logger.info(f"  最终归一化范围: [{np.min(delay_norm):.6f}, {np.max(delay_norm):.6f}]")
+        logger.info(
+            f"  截断前RobustScaler输出范围: [{current_min:.6f}, {current_max:.6f}]"
+        )
+        logger.info(
+            f"  截断后范围: [{current_min_clipped:.6f}, {current_max_clipped:.6f}]"
+        )
+        logger.info(
+            f"  最终归一化范围: [{np.min(delay_norm):.6f}, {np.max(delay_norm):.6f}]"
+        )
         logger.info(f"  归一化后数据平均值: {np.mean(delay_norm):.6f}")
         logger.info(f"  归一化后数据标准差: {np.std(delay_norm):.6f}")
 
@@ -384,7 +526,9 @@ class Normalizer:
 
         return delay_norm, normalization_params
 
-    def denormalize_delay(self, delay_norm: np.ndarray, normalization_params: dict) -> np.ndarray:
+    def denormalize_delay(
+        self, delay_norm: np.ndarray, normalization_params: dict
+    ) -> np.ndarray:
         """
         对延迟数据进行反归一化处理
 
@@ -396,59 +540,80 @@ class Normalizer:
             np.ndarray: 反归一化后的延迟数据，shape (n_samples,)
         """
         logger.info(f"开始反归一化延迟数据，输入形状: {delay_norm.shape}")
-        logger.info(f"归一化延迟数据统计 - 最小值: {np.min(delay_norm):.4f}, 最大值: {np.max(delay_norm):.4f}, 平均值: {np.mean(delay_norm):.4f}, 标准差: {np.std(delay_norm):.4f}")
+        logger.info(
+            f"归一化延迟数据统计 - 最小值: {np.min(delay_norm):.4f}, 最大值: {np.max(delay_norm):.4f}, 平均值: {np.mean(delay_norm):.4f}, 标准差: {np.std(delay_norm):.4f}"
+        )
         logger.info(f"反归一化参数: {normalization_params}")
 
         # 获取原始数据最小值，用于确保延迟值非负
-        original_min = normalization_params.get('original_min', 0.0)
-
-        # 检查是否使用对数变换
-        use_log_transform = normalization_params.get('use_log_transform', False)
+        original_min = normalization_params.get("original_min", 0.0)
 
         # RobustScaler反归一化
         logger.info("使用RobustScaler反归一化方法")
 
         # 从参数中提取值，添加安全检查
-        delay_scaler_center_ = normalization_params.get('delay_scaler_center_', np.array([0.0]))
-        delay_scaler_scale_ = normalization_params.get('delay_scaler_scale_', np.array([1.0]))
-        robust_scale_min = normalization_params.get('robust_scale_min', -1.0)
-        robust_scale_max = normalization_params.get('robust_scale_max', 1.0)
+        delay_scaler_center_ = normalization_params.get(
+            "delay_scaler_center_", np.array([0.0])
+        )
+        delay_scaler_scale_ = normalization_params.get(
+            "delay_scaler_scale_", np.array([1.0])
+        )
+        robust_scale_min = normalization_params.get("robust_scale_min", -1.0)
+        robust_scale_max = normalization_params.get("robust_scale_max", 1.0)
 
         # 1. 先将模型输出的[-1, 1]范围转换回RobustScaler的输出范围
         # 从参数中提取截断范围
-        clipped_min = normalization_params.get('clipped_min', robust_scale_min)
-        clipped_max = normalization_params.get('clipped_max', robust_scale_max)
+        clipped_min = normalization_params.get("clipped_min", robust_scale_min)
+        clipped_max = normalization_params.get("clipped_max", robust_scale_max)
 
         logger.info(f"使用范围进行反变换: [{clipped_min:.4f}, {clipped_max:.4f}]")
 
         if robust_scale_max > robust_scale_min:
             # 转换回RobustScaler的输出范围
-            delay_scaled = ((delay_norm + 1) / 2) * (robust_scale_max - robust_scale_min) + robust_scale_min
+            delay_scaled = ((delay_norm + 1) / 2) * (
+                robust_scale_max - robust_scale_min
+            ) + robust_scale_min
         else:
             delay_scaled = delay_norm
 
-        logger.info(f"转换回RobustScaler范围后 - 最小值: {np.min(delay_scaled):.4f}, 最大值: {np.max(delay_scaled):.4f}, 平均值: {np.mean(delay_scaled):.4f}, 标准差: {np.std(delay_scaled):.4f}")
+        logger.info(
+            f"转换回RobustScaler范围后 - 最小值: {np.min(delay_scaled):.4f}, 最大值: {np.max(delay_scaled):.4f}, 平均值: {np.mean(delay_scaled):.4f}, 标准差: {np.std(delay_scaled):.4f}"
+        )
 
         # 2. 然后应用RobustScaler的反变换
         # RobustScaler的反变换公式：原始值 = (归一化值 * 四分位距) + 中位数
         delay = (delay_scaled * delay_scaler_scale_) + delay_scaler_center_
 
-        logger.info(f"RobustScaler反变换后 - 最小值: {np.min(delay):.4f}, 最大值: {np.max(delay):.4f}, 平均值: {np.mean(delay):.4f}, 标准差: {np.std(delay):.4f}")
+        logger.info(
+            f"RobustScaler反变换后 - 最小值: {np.min(delay):.4f}, 最大值: {np.max(delay):.4f}, 平均值: {np.mean(delay):.4f}, 标准差: {np.std(delay):.4f}"
+        )
 
         # 应用指数变换，恢复原始值
-        if use_log_transform:
-            delay = np.exp(delay) - 1  # 指数变换，减1恢复原始值
-            logger.info(f"指数变换后 - 最小值: {np.min(delay):.4f}, 最大值: {np.max(delay):.4f}, 平均值: {np.mean(delay):.4f}, 标准差: {np.std(delay):.4f}")
+        # 始终使用指数变换，因为归一化时始终使用了对数变换
+        # 添加安全检查，防止溢出
+        max_safe_value = np.log(np.finfo(np.float64).max - 1)
+        delay = np.clip(delay, a_min=-max_safe_value, a_max=max_safe_value)
+        delay = np.exp(delay) - 1  # 指数变换，减1恢复原始值
 
-        # 确保延迟值非负，符合物理意义
-        # 使用原始数据的最小值作为下限，确保生成的数据与原始数据在同一范围内
-        delay = np.clip(delay, a_min=original_min, a_max=None)
+        # 限制延迟值的最大范围，避免过大的值导致可视化失败
+        max_delay = 10000.0  # 设置合理的最大延迟值
+        delay = np.clip(delay, a_min=original_min, a_max=max_delay)
+        logger.info(
+            f"指数变换后 - 最小值: {np.min(delay):.4f}, 最大值: {np.max(delay):.4f}, 平均值: {np.mean(delay):.4f}, 标准差: {np.std(delay):.4f}"
+        )
 
-        logger.info(f"最终反归一化后 - 最小值: {np.min(delay):.4f}, 最大值: {np.max(delay):.4f}, 平均值: {np.mean(delay):.4f}, 标准差: {np.std(delay):.4f}")
+        logger.info(
+            f"最终反归一化后 - 最小值: {np.min(delay):.4f}, 最大值: {np.max(delay):.4f}, 平均值: {np.mean(delay):.4f}, 标准差: {np.std(delay):.4f}"
+        )
 
         return delay
 
-    def normalize_loss_rate(self, loss_rate_values: np.ndarray, valid_loss_values: list, direction: str = 'up') -> tuple[np.ndarray, dict]:
+    def normalize_loss_rate(
+        self,
+        loss_rate_values: np.ndarray,
+        valid_loss_values: list,
+        direction: str = "up",
+    ) -> tuple[np.ndarray, dict]:
         """
         对丢包率数据进行归一化处理
 
@@ -462,8 +627,12 @@ class Normalizer:
                 - 归一化后的丢包率数据，shape (n_samples,)
                 - 归一化参数字典，包含丢包率映射等信息
         """
-        logger.info(f"开始归一化{direction}行丢包率数据，输入形状: {loss_rate_values.shape}")
-        logger.info(f"原始丢包率数据统计 - 最小值: {np.min(loss_rate_values):.4f}, 最大值: {np.max(loss_rate_values):.4f}, 平均值: {np.mean(loss_rate_values):.4f}, 标准差: {np.std(loss_rate_values):.4f}")
+        logger.info(
+            f"开始归一化{direction}行丢包率数据，输入形状: {loss_rate_values.shape}"
+        )
+        logger.info(
+            f"原始丢包率数据统计 - 最小值: {np.min(loss_rate_values):.4f}, 最大值: {np.max(loss_rate_values):.4f}, 平均值: {np.mean(loss_rate_values):.4f}, 标准差: {np.std(loss_rate_values):.4f}"
+        )
         logger.info(f"合法丢包值: {valid_loss_values}")
 
         # 构建loss_rate到index的映射
@@ -481,9 +650,13 @@ class Normalizer:
                 return loss_rate_mapping[closest_value]
 
         # 执行序数编码
-        loss_rate_indices = np.array([get_loss_rate_index(lr) for lr in loss_rate_values])
+        loss_rate_indices = np.array(
+            [get_loss_rate_index(lr) for lr in loss_rate_values]
+        )
 
-        logger.info(f"丢包率序数编码后 - 唯一值: {np.unique(loss_rate_indices)}, 统计: {np.bincount(loss_rate_indices)}")
+        logger.info(
+            f"丢包率序数编码后 - 唯一值: {np.unique(loss_rate_indices)}, 统计: {np.bincount(loss_rate_indices)}"
+        )
 
         # Min-Max缩放到[-1, 1]范围
         if N_vals > 1:
@@ -491,7 +664,9 @@ class Normalizer:
 
             # 检查归一化后的丢包率是否有足够的变化
             unique_norm_loss = np.unique(loss_norm)
-            logger.info(f"Min-Max缩放后 - 最小值: {np.min(loss_norm):.4f}, 最大值: {np.max(loss_norm):.4f}, 平均值: {np.mean(loss_norm):.4f}, 标准差: {np.std(loss_norm):.4f}")
+            logger.info(
+                f"Min-Max缩放后 - 最小值: {np.min(loss_norm):.4f}, 最大值: {np.max(loss_norm):.4f}, 平均值: {np.mean(loss_norm):.4f}, 标准差: {np.std(loss_norm):.4f}"
+            )
             logger.info(f"归一化丢包率唯一值数量: {len(unique_norm_loss)}")
 
             if len(unique_norm_loss) == 1:
@@ -500,7 +675,9 @@ class Normalizer:
                 loss_norm = loss_norm + noise
                 # 确保仍在[-1, 1]范围内
                 loss_norm = np.clip(loss_norm, -1, 1)
-                logger.info(f"添加噪声后 - 最小值: {np.min(loss_norm):.4f}, 最大值: {np.max(loss_norm):.4f}, 平均值: {np.mean(loss_norm):.4f}, 标准差: {np.std(loss_norm):.4f}")
+                logger.info(
+                    f"添加噪声后 - 最小值: {np.min(loss_norm):.4f}, 最大值: {np.max(loss_norm):.4f}, 平均值: {np.mean(loss_norm):.4f}, 标准差: {np.std(loss_norm):.4f}"
+                )
         else:
             # 当只有一个有效丢包值时，直接设置为0
             loss_norm = np.zeros_like(loss_rate_indices)
@@ -508,15 +685,17 @@ class Normalizer:
 
         # 保存归一化参数
         normalization_params = {
-            'loss_rate_mapping': loss_rate_mapping,
-            'valid_loss_values': valid_loss_values
+            "loss_rate_mapping": loss_rate_mapping,
+            "valid_loss_values": valid_loss_values,
         }
 
         logger.info(f"归一化参数: {normalization_params}")
 
         return loss_norm, normalization_params
 
-    def denormalize_loss_rate(self, loss_norm: np.ndarray, normalization_params: dict) -> np.ndarray:
+    def denormalize_loss_rate(
+        self, loss_norm: np.ndarray, normalization_params: dict
+    ) -> np.ndarray:
         """
         对丢包率数据进行反归一化处理
 
@@ -528,11 +707,15 @@ class Normalizer:
             np.ndarray: 反归一化后的丢包率数据，shape (n_samples,)
         """
         logger.info(f"开始反归一化丢包率数据，输入形状: {loss_norm.shape}")
-        logger.info(f"归一化丢包率数据统计 - 最小值: {np.min(loss_norm):.4f}, 最大值: {np.max(loss_norm):.4f}, 平均值: {np.mean(loss_norm):.4f}, 标准差: {np.std(loss_norm):.4f}")
+        logger.info(
+            f"归一化丢包率数据统计 - 最小值: {np.min(loss_norm):.4f}, 最大值: {np.max(loss_norm):.4f}, 平均值: {np.mean(loss_norm):.4f}, 标准差: {np.std(loss_norm):.4f}"
+        )
         logger.info(f"反归一化参数: {normalization_params}")
 
         # 从参数中提取值，添加安全检查
-        valid_loss_values = normalization_params.get('valid_loss_values', [0.0, 1/3, 0.5, 2/3, 1.0])
+        valid_loss_values = normalization_params.get(
+            "valid_loss_values", [0.0, 1 / 3, 0.5, 2 / 3, 1.0]
+        )
 
         logger.info(f"合法丢包值: {valid_loss_values}")
 
@@ -547,71 +730,8 @@ class Normalizer:
         # 映射到合法值
         loss_rate = np.array(valid_loss_values)[idx]
 
-        logger.info(f"反归一化后丢包率统计 - 最小值: {np.min(loss_rate):.4f}, 最大值: {np.max(loss_rate):.4f}, 平均值: {np.mean(loss_rate):.4f}, 标准差: {np.std(loss_rate):.4f}")
+        logger.info(
+            f"反归一化后丢包率统计 - 最小值: {np.min(loss_rate):.4f}, 最大值: {np.max(loss_rate):.4f}, 平均值: {np.mean(loss_rate):.4f}, 标准差: {np.std(loss_rate):.4f}"
+        )
 
         return loss_rate
-
-
-# 保留原有函数作为兼容接口
-def normalize_delay(delay_values: np.ndarray, use_log_transform: bool = True) -> tuple[np.ndarray, dict]:
-    """
-    对延迟数据进行归一化处理（兼容旧接口）
-
-    Args:
-        delay_values: 原始延迟数据，shape (n_samples,)
-        use_log_transform: 是否使用对数变换，默认为True
-
-    Returns:
-        tuple: 包含两个元素的元组
-            - 归一化后的延迟数据，shape (n_samples,)
-            - 归一化参数字典，包含归一化方法、变换参数等
-    """
-    normalizer = Normalizer()
-    return normalizer.normalize_delay(delay_values, use_log_transform)
-
-
-def denormalize_delay(delay_norm: np.ndarray, normalization_params: dict) -> np.ndarray:
-    """
-    对延迟数据进行反归一化处理（兼容旧接口）
-
-    Args:
-        delay_norm: 归一化后的延迟数据，shape (n_samples,)
-        normalization_params: 归一化参数，包含归一化方法、变换参数等
-
-    Returns:
-        np.ndarray: 反归一化后的延迟数据，shape (n_samples,)
-    """
-    normalizer = Normalizer()
-    return normalizer.denormalize_delay(delay_norm, normalization_params)
-
-
-def normalize_loss_rate(loss_rate_values: np.ndarray, valid_loss_values: list) -> tuple[np.ndarray, dict]:
-    """
-    对丢包率数据进行归一化处理（兼容旧接口）
-
-    Args:
-        loss_rate_values: 原始丢包率数据，shape (n_samples,)
-        valid_loss_values: 合法丢包值列表，包含所有可能的丢包率值
-
-    Returns:
-        tuple: 包含两个元素的元组
-            - 归一化后的丢包率数据，shape (n_samples,)
-            - 归一化参数字典，包含丢包率映射等信息
-    """
-    normalizer = Normalizer(valid_loss_values)
-    return normalizer.normalize_loss_rate(loss_rate_values, valid_loss_values)
-
-
-def denormalize_loss_rate(loss_norm: np.ndarray, normalization_params: dict) -> np.ndarray:
-    """
-    对丢包率数据进行反归一化处理（兼容旧接口）
-
-    Args:
-        loss_norm: 归一化后的丢包率数据，shape (n_samples,)
-        normalization_params: 归一化参数，包含丢包率映射和合法丢包值列表
-
-    Returns:
-        np.ndarray: 反归一化后的丢包率数据，shape (n_samples,)
-    """
-    normalizer = Normalizer()
-    return normalizer.denormalize_loss_rate(loss_norm, normalization_params)

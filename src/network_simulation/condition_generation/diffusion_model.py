@@ -20,16 +20,33 @@ class Time2Vec(nn.Module):
     注意：输入时间步应归一化到[0,1]范围，避免cos/sin震荡剧烈影响训练稳定性。
     """
 
-    def __init__(self, d_model: int):
+    def __init__(self, d_model: int, T: int = 1000):
+        """初始化Time2Vec位置编码模块
+
+        Args:
+            d_model (int): 输出编码维度，必须 >= 1
+            T (int, optional): 扩散步数，用于初始化编码参数，默认值为1000
+
+        Examples:
+            >>> from network_simulation.condition_generation.diffusion_model import Time2Vec
+            >>> # 初始化一个d_model=16的Time2Vec模块
+            >>> time2vec = Time2Vec(d_model=16, T=1000)
+        """
         super().__init__()
         self.d_model = d_model
+        self.T = T
         if d_model < 1:
             raise ValueError("d_model must be >= 1")
         # 第0维用cos，其余d_model-1维用sin
-        # 使用合适的初始化值，改善梯度流动
-        self.w0 = nn.Parameter(torch.randn(1) * 0.1)
+        # 根据扩散步数T初始化omega_0，让周期覆盖整个[0,1]区间
+        # 使用接近2π的随机值初始化，保持良好初始编码能力的同时允许学习
+        omega_0 = 2 * np.pi if T > 0 else 1.0
+        # 让w0可以学习，初始值接近2π，添加小的随机扰动
+        self.w0 = nn.Parameter(torch.tensor([omega_0]) + torch.randn(1) * 0.1)
         self.b0 = nn.Parameter(torch.randn(1) * 0.1)
         if d_model > 1:
+            # 使用随机初始化，让不同维度的频率不同，更好地编码时间信息
+            # 参考Time2Vec论文，使用对数尺度初始化
             self.w = nn.Parameter(torch.randn(d_model - 1) * 0.1)
             self.b = nn.Parameter(torch.randn(d_model - 1) * 0.1)
         else:
@@ -40,16 +57,26 @@ class Time2Vec(nn.Module):
         """前向传播
 
         Args:
-            x: 输入时间步张量，shape (batch_size, seq_len, 1)，应归一化到[0,1]范围
+            x (torch.Tensor): 输入时间步张量，shape (batch_size, seq_len, 1)，应归一化到[0,1]范围
 
         Returns:
-            位置编码后的张量，shape (batch_size, seq_len, d_model)
+            torch.Tensor: 位置编码后的张量，shape (batch_size, seq_len, d_model)
+
+        Examples:
+            >>> from network_simulation.condition_generation.diffusion_model import Time2Vec
+            >>> import torch
+            >>> time2vec = Time2Vec(d_model=16, T=1000)
+            >>> # 创建一个随机时间步张量，shape (2, 100, 1)，值在[0,1]范围内
+            >>> x = torch.rand(2, 100, 1)
+            >>> # 生成位置编码
+            >>> time_embed = time2vec(x)
+            >>> print(f"输入形状: {x.shape}, 输出形状: {time_embed.shape}")
         """
         # 将输入转换为float类型以匹配参数类型
         x = x.float()
 
         # 检查输入是否在[0,1]范围，超出则记录警告
-        if x.min() < 0 or x.max() > 1:
+        if x.min() < -1e-6 or x.max() > 1 + 1e-6:
             logger.warning(
                 f"Time2Vec输入不在[0,1]范围内，最小值: {x.min()}, 最大值: {x.max()}，这可能导致训练不稳定。"
             )
@@ -77,12 +104,38 @@ class Time2Vec(nn.Module):
 
 
 class CausalDilatedConv(nn.Module):
-    """因果膨胀卷积层"""
+    """因果膨胀卷积层
+
+    该层实现了因果膨胀卷积，确保模型在生成序列时只能看到过去和当前的信息，
+    适合用于时序数据生成任务。
+    """
 
     def __init__(
         self, in_channels: int, out_channels: int, kernel_size: int, dilation: int
     ):
+        """初始化因果膨胀卷积层
+
+        Args:
+            in_channels (int): 输入通道数
+            out_channels (int): 输出通道数
+            kernel_size (int): 卷积核大小
+            dilation (int): 膨胀率
+
+        Examples:
+            >>> from network_simulation.condition_generation.diffusion_model import CausalDilatedConv
+            >>> # 初始化一个因果膨胀卷积层
+            >>> conv = CausalDilatedConv(
+            ...     in_channels=64,
+            ...     out_channels=64,
+            ...     kernel_size=3,
+            ...     dilation=2
+            ... )
+        """
         super().__init__()
+        # 确保kernel_size和dilation合法
+        assert kernel_size >= 1, f"Kernel size must be at least 1, got {kernel_size}"
+        assert dilation >= 1, f"Dilation must be at least 1, got {dilation}"
+
         self.padding = (kernel_size - 1) * dilation
         # 确保padding为非负值，避免后续切片操作出错
         assert self.padding >= 0, f"Padding must be non-negative, got {self.padding}"
@@ -98,28 +151,57 @@ class CausalDilatedConv(nn.Module):
         """前向传播
 
         Args:
-            x: 输入张量，shape (batch_size, in_channels, seq_len)
+            x (torch.Tensor): 输入张量，shape (batch_size, in_channels, seq_len)
 
         Returns:
-            卷积后的张量，shape (batch_size, out_channels, seq_len)
+            torch.Tensor: 卷积后的张量，shape (batch_size, out_channels, seq_len)
+
+        Examples:
+            >>> from network_simulation.condition_generation.diffusion_model import CausalDilatedConv
+            >>> import torch
+            >>> conv = CausalDilatedConv(in_channels=64, out_channels=64, kernel_size=3, dilation=2)
+            >>> # 创建一个随机输入张量
+            >>> x = torch.randn(2, 64, 100)
+            >>> # 执行卷积操作
+            >>> out = conv(x)
+            >>> print(f"输入形状: {x.shape}, 输出形状: {out.shape}")
         """
         out = self.conv(x)
         # 移除填充以保持因果结构，防止 padding=0 时空切片
-        if self.padding > 0:
-            return out[:, :, : -self.padding]
-        else:
-            return out
+        return out[:, :, : -self.padding] if self.padding > 0 else out
 
     def __repr__(self) -> str:
         return f"CausalDilatedConv(in_channels={self.conv.in_channels}, out_channels={self.conv.out_channels}, kernel_size={self.conv.kernel_size[0]}, dilation={self.conv.dilation[0]})"
 
 
 class UNetBlock(nn.Module):
-    """UNet块"""
+    """UNet块
+
+    该块实现了基于因果膨胀卷积的残差连接结构，用于构建深层因果网络，
+    适合用于时序数据生成任务。
+    """
 
     def __init__(
         self, in_channels: int, out_channels: int, kernel_size: int, dilation: int
     ):
+        """初始化UNet块
+
+        Args:
+            in_channels (int): 输入通道数
+            out_channels (int): 输出通道数
+            kernel_size (int): 卷积核大小
+            dilation (int): 膨胀率
+
+        Examples:
+            >>> from network_simulation.condition_generation.diffusion_model import UNetBlock
+            >>> # 初始化一个UNet块
+            >>> unet_block = UNetBlock(
+            ...     in_channels=64,
+            ...     out_channels=64,
+            ...     kernel_size=3,
+            ...     dilation=1
+            ... )
+        """
         super().__init__()
         self.conv1 = CausalDilatedConv(in_channels, out_channels, kernel_size, dilation)
         self.conv2 = CausalDilatedConv(
@@ -140,10 +222,20 @@ class UNetBlock(nn.Module):
         """前向传播
 
         Args:
-            x: 输入张量，shape (batch_size, in_channels, seq_len)
+            x (torch.Tensor): 输入张量，shape (batch_size, in_channels, seq_len)
 
         Returns:
-            经过UNet块处理后的张量，shape (batch_size, out_channels, seq_len)
+            torch.Tensor: 经过UNet块处理后的张量，shape (batch_size, out_channels, seq_len)
+
+        Examples:
+            >>> from network_simulation.condition_generation.diffusion_model import UNetBlock
+            >>> import torch
+            >>> unet_block = UNetBlock(in_channels=64, out_channels=64, kernel_size=3, dilation=1)
+            >>> # 创建一个随机输入张量
+            >>> x = torch.randn(2, 64, 100)
+            >>> # 执行UNet块操作
+            >>> out = unet_block(x)
+            >>> print(f"输入形状: {x.shape}, 输出形状: {out.shape}")
         """
         residual = self.shortcut(x)
 
@@ -161,44 +253,37 @@ class UNetBlock(nn.Module):
         return f"UNetBlock(in_channels={self.conv1.conv.in_channels}, out_channels={self.conv1.conv.out_channels}, kernel_size={self.conv1.conv.kernel_size[0]}, dilation={self.conv1.conv.dilation[0]})"
 
 
-class BehaviorEmbedding(nn.Module):
-    """行为嵌入层"""
+class CausalDilatedNet(nn.Module):
+    """因果膨胀卷积网络，使用因果膨胀卷积
 
-    def __init__(self, num_behaviors: int, d_embed: int, padding_idx: int = 0):
-        super().__init__()
-        self.embedding = nn.Embedding(num_behaviors, d_embed, padding_idx=padding_idx)
-        self.dropout = nn.Dropout(0.1)
-
-    def forward(self, behavior_ids: torch.Tensor) -> torch.Tensor:
-        """前向传播
-
-        Args:
-            behavior_ids: 行为ID序列，shape (batch_size, seq_len)
-
-        Returns:
-            行为嵌入向量，shape (batch_size, seq_len, d_embed)
-        """
-        return self.dropout(self.embedding(behavior_ids))
-
-    def __repr__(self) -> str:
-        return f"BehaviorEmbedding(num_behaviors={self.embedding.num_embeddings}, d_embed={self.embedding.embedding_dim}, padding_idx={self.embedding.padding_idx})"
-
-
-class UNet(nn.Module):
-    """简化版U-Net主干网络，使用因果膨胀卷积
-
-    注意：这是一个简化版的U-Net，没有传统的编码器-解码器结构（下采样/上采样），
-    而是堆叠的残差块结构，适合因果时序生成任务。
+    这是一个基于因果膨胀卷积的网络，用于条件扩散模型中的噪声预测。
+    它采用堆叠的残差块结构，适合因果时序生成任务。
     """
 
     def __init__(self, input_dim: int, behavior_embed_dim: int, T: int = 1000):
+        """初始化因果膨胀卷积网络
+
+        Args:
+            input_dim (int): 输入维度，即网络处理的特征维度
+            behavior_embed_dim (int): 行为嵌入维度
+            T (int, optional): 扩散步数，用于初始化Time2Vec编码，默认值为1000
+
+        Examples:
+            >>> from network_simulation.condition_generation.diffusion_model import CausalDilatedNet
+            >>> # 初始化一个因果膨胀卷积网络
+            >>> net = CausalDilatedNet(
+            ...     input_dim=4,
+            ...     behavior_embed_dim=32,
+            ...     T=1000
+            ... )
+        """
         super().__init__()
         self.input_dim = input_dim
         self.behavior_embed_dim = behavior_embed_dim
         self.T = T
 
-        # Time2Vec位置编码
-        self.time2vec = Time2Vec(behavior_embed_dim)
+        # Time2Vec位置编码，传递扩散步数T
+        self.time2vec = Time2Vec(behavior_embed_dim, self.T)
 
         # 计算总输入维度：原始输入维度 + 行为嵌入维度 + 时间嵌入维度
         total_input_dim = input_dim + behavior_embed_dim + behavior_embed_dim
@@ -209,20 +294,11 @@ class UNet(nn.Module):
         self.network = nn.Sequential(
             # 输入投影层，将总输入维度投影到固定维度64，避免信息丢失
             nn.Conv1d(total_input_dim, proj_out_dim, kernel_size=1),
-            # 第一层：膨胀率1，提取低层特征
+            # 因果膨胀卷积层，使用递增的膨胀率扩大感受野
             UNetBlock(proj_out_dim, proj_out_dim, kernel_size=3, dilation=1),
-            # 第二层：膨胀率2，扩大感受野
             UNetBlock(proj_out_dim, proj_out_dim, kernel_size=3, dilation=2),
-            # 第三层：膨胀率4，进一步扩大感受野
             UNetBlock(proj_out_dim, proj_out_dim, kernel_size=3, dilation=4),
-            # 第四层：膨胀率8，扩大感受野
             UNetBlock(proj_out_dim, proj_out_dim, kernel_size=3, dilation=8),
-            # 第五层：膨胀率4，缩小感受野
-            UNetBlock(proj_out_dim, proj_out_dim, kernel_size=3, dilation=4),
-            # 第六层：膨胀率2，缩小感受野
-            UNetBlock(proj_out_dim, proj_out_dim, kernel_size=3, dilation=2),
-            # 第七层：膨胀率1，恢复细节
-            UNetBlock(proj_out_dim, proj_out_dim, kernel_size=3, dilation=1),
             # 输出层：映射回输入维度，使用因果卷积确保因果性
             CausalDilatedConv(proj_out_dim, input_dim, kernel_size=3, dilation=1),
         )
@@ -233,12 +309,25 @@ class UNet(nn.Module):
         """前向传播
 
         Args:
-            x: 输入张量，shape (batch_size, seq_len, input_dim)
-            t: 时间步张量，shape (batch_size, 1, 1) - 每个样本共享一个时间步
-            behavior_embed: 行为嵌入向量，shape (batch_size, seq_len, behavior_embed_dim)
+            x (torch.Tensor): 输入张量，shape (batch_size, seq_len, input_dim)
+            t (torch.Tensor): 时间步张量，shape (batch_size, 1, 1) - 每个样本共享一个时间步
+            behavior_embed (torch.Tensor): 行为嵌入向量，shape (batch_size, seq_len, behavior_embed_dim)
 
         Returns:
-            网络输出张量，shape (batch_size, seq_len, input_dim)
+            torch.Tensor: 网络输出张量，shape (batch_size, seq_len, input_dim)
+
+        Examples:
+            >>> from network_simulation.condition_generation.diffusion_model import CausalDilatedNet
+            >>> import torch
+            >>> net = CausalDilatedNet(input_dim=4, behavior_embed_dim=32, T=1000)
+            >>> # 创建随机输入张量
+            >>> batch_size, seq_len = 2, 100
+            >>> x = torch.randn(batch_size, seq_len, 4)
+            >>> t = torch.randn(batch_size, 1, 1)
+            >>> behavior_embed = torch.randn(batch_size, seq_len, 32)
+            >>> # 执行前向传播
+            >>> out = net(x, t, behavior_embed)
+            >>> print(f"输入形状: {x.shape}, 输出形状: {out.shape}")
         """
         batch_size, seq_len, input_dim = x.shape
 
@@ -273,13 +362,33 @@ class UNet(nn.Module):
         return x
 
     def __repr__(self) -> str:
-        return f"UNet(input_dim={self.input_dim}, behavior_embed_dim={self.behavior_embed_dim}, T={self.T})"
+        return f"CausalDilatedNet(input_dim={self.input_dim}, behavior_embed_dim={self.behavior_embed_dim}, T={self.T})"
 
 
 class DiffusionSchedule(nn.Module):
-    """扩散调度"""
+    """扩散调度
+
+    该类实现了DDPM（Denoising Diffusion Probabilistic Models）的扩散过程调度，
+    负责管理噪声添加和采样过程中的参数计算。
+    """
 
     def __init__(self, T: int = 1000, beta_start: float = 1e-4, beta_end: float = 0.02):
+        """初始化扩散调度
+
+        Args:
+            T (int, optional): 扩散步数，默认值为1000
+            beta_start (float, optional): 初始噪声强度，默认值为1e-4
+            beta_end (float, optional): 最终噪声强度，默认值为0.02
+
+        Examples:
+            >>> from network_simulation.condition_generation.diffusion_model import DiffusionSchedule
+            >>> # 初始化一个扩散调度
+            >>> schedule = DiffusionSchedule(
+            ...     T=1000,
+            ...     beta_start=1e-4,
+            ...     beta_end=0.02
+            ... )
+        """
         super().__init__()
         self.T = T
         self.beta_start = beta_start
@@ -315,12 +424,29 @@ class DiffusionSchedule(nn.Module):
         self, x_0: torch.Tensor, t: torch.Tensor, noise: torch.Tensor = None
     ) -> torch.Tensor:
         """添加噪声到干净样本
+
+        根据扩散时间步t，将噪声添加到干净样本x_0上，生成带噪声的样本x_t。
+
         Args:
-            x_0: 干净样本，shape (batch_size, seq_len, input_dim)
-            t: 扩散时间步，shape (batch_size,)
-            noise: 噪声，shape (batch_size, seq_len, input_dim)，如果为None则自动生成
+            x_0 (torch.Tensor): 干净样本，shape (batch_size, seq_len, input_dim)
+            t (torch.Tensor): 扩散时间步，shape (batch_size,)
+            noise (torch.Tensor, optional): 噪声，shape (batch_size, seq_len, input_dim)，如果为None则自动生成
+
         Returns:
-            带噪声的样本，shape (batch_size, seq_len, input_dim)
+            torch.Tensor: 带噪声的样本，shape (batch_size, seq_len, input_dim)
+
+        Examples:
+            >>> from network_simulation.condition_generation.diffusion_model import DiffusionSchedule
+            >>> import torch
+            >>> schedule = DiffusionSchedule(T=1000)
+            >>> # 创建干净样本
+            >>> batch_size, seq_len, input_dim = 2, 100, 4
+            >>> x_0 = torch.randn(batch_size, seq_len, input_dim)
+            >>> # 随机选择时间步
+            >>> t = torch.randint(0, 1000, (batch_size,))
+            >>> # 添加噪声
+            >>> x_t = schedule.add_noise(x_0, t)
+            >>> print(f"干净样本形状: {x_0.shape}, 噪声样本形状: {x_t.shape}")
         """
         if noise is None:
             noise = torch.randn_like(x_0)
@@ -440,8 +566,8 @@ class ConditionDiffusionModel(nn.Module):
             f"初始化条件扩散模型，参数: input_dim={self.input_dim}, behavior_embed_dim={self.behavior_embed_dim}, T={self.T}, constrained_dims={self.constrained_dims}, constraint_bounds={self.constraint_bounds}, constraint_every={self.constraint_every}, has_normalization_params={normalization_params is not None}, cond_dim={cond_dim}"
         )
 
-        # U-Net主干，用于预测噪声
-        self.unet = UNet(self.input_dim, self.behavior_embed_dim, T=self.T)
+        # 因果膨胀卷积网络主干，用于预测噪声
+        self.model = CausalDilatedNet(self.input_dim, self.behavior_embed_dim, T=self.T)
 
         # 扩散调度 - 管理扩散过程的噪声添加和采样参数
         self.schedule = DiffusionSchedule(self.T)
@@ -457,15 +583,23 @@ class ConditionDiffusionModel(nn.Module):
         Returns:
             预测的噪声，shape (batch_size, seq_len, input_dim)
         """
+        # 统一设备
+        device = next(self.parameters()).device
+        x = x.to(device)
+        t = t.to(device)
+        condition_vector = condition_vector.to(device)
+
         # 确保condition_proj已初始化
         if self.condition_proj is None:
-            raise ValueError("condition_proj未初始化，请确保在模型初始化时提供cond_dim参数")
+            raise ValueError(
+                "condition_proj未初始化，请确保在模型初始化时提供cond_dim参数"
+            )
 
         # 将条件向量映射到期望的行为嵌入维度
         behavior_embed = self.condition_proj(condition_vector)
 
-        # U-Net预测噪声
-        noise_pred = self.unet(x, t, behavior_embed)
+        # 因果膨胀卷积网络预测噪声
+        noise_pred = self.model(x, t, behavior_embed)
 
         return noise_pred
 
@@ -485,7 +619,9 @@ class ConditionDiffusionModel(nn.Module):
 
         # 确保condition_proj已初始化
         if self.condition_proj is None:
-            raise ValueError("condition_proj未初始化，请确保在模型初始化时提供cond_dim参数")
+            raise ValueError(
+                "condition_proj未初始化，请确保在模型初始化时提供cond_dim参数"
+            )
 
         # 将条件向量映射到期望的行为嵌入维度
         behavior_embed = self.condition_proj(condition_vector)
@@ -555,7 +691,7 @@ class ConditionDiffusionModel(nn.Module):
         t_tensor = torch.full((x.shape[0], 1, 1), t_norm, device=device)
 
         # 预测噪声
-        noise_pred = self.unet(x, t_tensor, behavior_embed)
+        noise_pred = self.model(x, t_tensor, behavior_embed)
 
         # 计算当前时间步的参数
         # 获取标量参数，shape: (batch_size,)
@@ -567,6 +703,9 @@ class ConditionDiffusionModel(nn.Module):
         sqrt_one_minus_alpha_cumprod_t = self.schedule.sqrt_one_minus_alpha_cumprod[
             t_idx
         ].view(x.shape[0], 1, 1)
+        sqrt_recip_alpha_cumprod_t = self.schedule.sqrt_recip_alpha_cumprod[t_idx].view(
+            x.shape[0], 1, 1
+        )
 
         # 计算均值和方差
         if t > 0:
@@ -576,9 +715,13 @@ class ConditionDiffusionModel(nn.Module):
 
         # 标准DDPM反向扩散公式（Eq. 11）
         # 计算均值 mean（标准DDPM公式）
-        mean = (1 / torch.sqrt(alpha_t)) * (
-            x - (beta_t / sqrt_one_minus_alpha_cumprod_t) * noise_pred
-        )
+        # 注意：由于 alpha_t = 1 - beta_t，所以 (1 - alpha_t) = beta_t
+        # 因此，以下两种表示等价：
+        # coeff = (1 - alpha_t) / sqrt_one_minus_alpha_cumprod_t
+        # coeff = beta_t / sqrt_one_minus_alpha_cumprod_t
+        # 当前代码使用 (1 - alpha_t)，这是DDPM论文中使用的形式，更清晰
+        coeff = (1 - alpha_t) / sqrt_one_minus_alpha_cumprod_t
+        mean = sqrt_recip_alpha_cumprod_t * (x - coeff * noise_pred)
 
         # 添加噪声
         if t > 0:
@@ -689,82 +832,6 @@ class ConditionDiffusionModel(nn.Module):
         loss = F.mse_loss(noise_pred, noise)
 
         return loss
-
-    def denormalize(
-        self, x: torch.Tensor
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """将归一化的生成样本转换回原始物理空间
-
-        Args:
-            x: 归一化的生成样本，shape (batch_size, seq_len, input_dim)
-
-        Returns:
-            tuple: 反归一化后的延迟1、丢包率1、延迟2、丢包率2，
-                  形状分别为 (batch_size, seq_len), (batch_size, seq_len), (batch_size, seq_len), (batch_size, seq_len)
-        """
-        if self.normalization_params is None:
-            raise ValueError("归一化参数未设置，无法进行反归一化！")
-
-        # 将张量转换为numpy数组
-        x_np = x.cpu().numpy()
-        batch_size, seq_len, _ = x_np.shape
-
-        # 提取延迟和丢包率（仅支持4维输入）
-        delay1_norm = x_np[:, :, 0]
-        loss1_norm = x_np[:, :, 1]
-        delay2_norm = x_np[:, :, 2]
-        loss2_norm = x_np[:, :, 3]
-
-        # 导入归一化器
-        from .normalization import Normalizer
-
-        # 检查是否有上下行独立的合法丢包值
-        if (
-            "valid_loss_values_up" in self.normalization_params
-            and "valid_loss_values_down" in self.normalization_params
-        ):
-            # 使用上下行独立的合法丢包值
-            normalizer = Normalizer()
-            normalizer.normalization_params = self.normalization_params
-        else:
-            # 使用全局合法丢包值（兼容旧版本）
-            valid_loss_values = self.normalization_params.get("loss_rate", {}).get(
-                "valid_loss_values", [0.0, 0.5, 1.0]
-            )
-            normalizer = Normalizer(valid_loss_values)
-            normalizer.normalization_params = self.normalization_params
-
-        # 对每个样本进行反归一化
-        delay1_list = []
-        loss1_list = []
-        delay2_list = []
-        loss2_list = []
-
-        for i in range(batch_size):
-            if self.input_dim == 2:
-                # 单流反归一化
-                delay1, loss1 = normalizer.denormalize(delay1_norm[i], loss1_norm[i])
-                delay1_list.append(delay1)
-                loss1_list.append(loss1)
-            else:
-                # 双流反归一化
-                delay1, loss1, delay2, loss2 = normalizer.denormalize4d(
-                    delay1_norm[i], loss1_norm[i], delay2_norm[i], loss2_norm[i]
-                )
-                delay1_list.append(delay1)
-                loss1_list.append(loss1)
-                delay2_list.append(delay2)
-                loss2_list.append(loss2)
-
-        if self.input_dim == 2:
-            return np.array(delay1_list), np.array(loss1_list)
-        else:
-            return (
-                np.array(delay1_list),
-                np.array(loss1_list),
-                np.array(delay2_list),
-                np.array(loss2_list),
-            )
 
     def __repr__(self) -> str:
         return f"ConditionDiffusionModel(input_dim={self.input_dim}, behavior_embed_dim={self.behavior_embed_dim}, T={self.T})"

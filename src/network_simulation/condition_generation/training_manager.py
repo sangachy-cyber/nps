@@ -11,13 +11,12 @@ import torch.optim as optim
 from pathlib import Path
 from typing import Optional
 
-from network_simulation.condition_generation.diffusion_model import ConditionDiffusionModel
+from network_simulation.condition_generation.diffusion_model import (
+    ConditionDiffusionModel,
+)
 from network_simulation.condition_generation.normalization import Normalizer
 from network_simulation.utils.logger import get_logger
-from config import (
-    DEFAULT_EPOCHS,
-    DEFAULT_BATCH_SIZE
-)
+from config import DEFAULT_EPOCHS, DEFAULT_BATCH_SIZE
 
 # 获取日志记录器
 logger = get_logger(__name__)
@@ -26,10 +25,12 @@ logger = get_logger(__name__)
 class TrainingManager:
     """训练管理器，封装完整的条件扩散模型训练流程"""
 
-    def __init__(self,
-                 input_preprocess_dir: Path,
-                 output_train_dir: Path,
-                 max_samples: Optional[int] = None):
+    def __init__(
+        self,
+        input_preprocess_dir: Path,
+        output_train_dir: Path,
+        max_samples: Optional[int] = None,
+    ):
         """初始化训练管理器
 
         Args:
@@ -59,7 +60,6 @@ class TrainingManager:
         self.valid_loss_values_up = None
         self.valid_loss_values_down = None
         self.num_behaviors = None
-        self.use_log_transform = False
 
         # 归一化参数
         self.delay1_scaler_center_ = None
@@ -113,19 +113,21 @@ class TrainingManager:
 
         self.preprocess_data = np.load(preprocess_file, allow_pickle=True)
         self.sequences = self.preprocess_data["sequences"]  # 4D序列 [batch, seq_len, 4]
-        self.conditions = self.preprocess_data["conditions"]  # 条件向量 [batch, cond_dim]
+        self.conditions = self.preprocess_data[
+            "conditions"
+        ]  # 条件向量 [batch, cond_dim]
         self.behavior_ids = self.preprocess_data["behavior_ids"]
         self.loss_rate_mapping_up = self.preprocess_data["loss_rate_mapping_up"].item()
-        self.loss_rate_mapping_down = self.preprocess_data["loss_rate_mapping_down"].item()
-        self.valid_loss_values_up = self.preprocess_data["valid_loss_values_up"].tolist()
-        self.valid_loss_values_down = self.preprocess_data["valid_loss_values_down"].tolist()
+        self.loss_rate_mapping_down = self.preprocess_data[
+            "loss_rate_mapping_down"
+        ].item()
+        self.valid_loss_values_up = self.preprocess_data[
+            "valid_loss_values_up"
+        ].tolist()
+        self.valid_loss_values_down = self.preprocess_data[
+            "valid_loss_values_down"
+        ].tolist()
         self.num_behaviors = self.preprocess_data["num_behaviors"].item()
-
-        # 检查是否使用对数变换
-        self.use_log_transform = self.preprocess_data.get("delay1_use_log_transform", False)
-        if isinstance(self.use_log_transform, np.ndarray):
-            self.use_log_transform = self.use_log_transform.item()
-        logger.info(f"是否使用对数变换: {self.use_log_transform}")
 
         # 加载robust归一化参数（上下行独立）
         self.delay1_scaler_center_ = self.preprocess_data["delay1_scaler_center_"]
@@ -144,48 +146,50 @@ class TrainingManager:
 
         # 限制样本数量，防止内存不足
         if self.max_samples is not None and len(self.sequences) > self.max_samples:
-            logger.info(f"样本数量过大 ({len(self.sequences)}), 将使用前 {self.max_samples} 个样本进行训练")
-            self.sequences = self.sequences[:self.max_samples]
-            self.conditions = self.conditions[:self.max_samples]
-            self.behavior_ids = self.behavior_ids[:self.max_samples]
+            logger.info(
+                f"样本数量过大 ({len(self.sequences)}), 将使用前 {self.max_samples} 个样本进行训练"
+            )
+            self.sequences = self.sequences[: self.max_samples]
+            self.conditions = self.conditions[: self.max_samples]
+            self.behavior_ids = self.behavior_ids[: self.max_samples]
 
     def _init_normalizer(self):
         """初始化归一化器"""
         logger.info("初始化归一化器")
-        self.normalizer = Normalizer(self.valid_loss_values_up, self.valid_loss_values_down)
+        self.normalizer = Normalizer(
+            self.valid_loss_values_up, self.valid_loss_values_down
+        )
 
         # 构建归一化参数字典，支持上下行独立参数
         normalization_params = {
-            'delay_up': {
-                'normalization_method': 'robust',
-                'delay_scaler_center_': self.delay1_scaler_center_,
-                'delay_scaler_scale_': self.delay1_scaler_scale_,
-                'robust_scale_min': self.delay1_robust_scale_min,
-                'robust_scale_max': self.delay1_robust_scale_max,
-                'clipped_min': self.delay1_clipped_min,
-                'clipped_max': self.delay1_clipped_max,
-                'original_min': self.preprocess_data.get('original_min', 0.0),
-                'use_log_transform': self.use_log_transform
+            "delay_up": {
+                "normalization_method": "robust",
+                "delay_scaler_center_": self.delay1_scaler_center_,
+                "delay_scaler_scale_": self.delay1_scaler_scale_,
+                "robust_scale_min": self.delay1_robust_scale_min,
+                "robust_scale_max": self.delay1_robust_scale_max,
+                "clipped_min": self.delay1_clipped_min,
+                "clipped_max": self.delay1_clipped_max,
+                "original_min": self.preprocess_data.get("original_min", 0.0),
             },
-            'delay_down': {
-                'normalization_method': 'robust',
-                'delay_scaler_center_': self.delay2_scaler_center_,
-                'delay_scaler_scale_': self.delay2_scaler_scale_,
-                'robust_scale_min': self.delay2_robust_scale_min,
-                'robust_scale_max': self.delay2_robust_scale_max,
-                'clipped_min': self.delay2_clipped_min,
-                'clipped_max': self.delay2_clipped_max,
-                'original_min': self.preprocess_data.get('original_min', 0.0),
-                'use_log_transform': self.use_log_transform
+            "delay_down": {
+                "normalization_method": "robust",
+                "delay_scaler_center_": self.delay2_scaler_center_,
+                "delay_scaler_scale_": self.delay2_scaler_scale_,
+                "robust_scale_min": self.delay2_robust_scale_min,
+                "robust_scale_max": self.delay2_robust_scale_max,
+                "clipped_min": self.delay2_clipped_min,
+                "clipped_max": self.delay2_clipped_max,
+                "original_min": self.preprocess_data.get("original_min", 0.0),
             },
-            'loss_rate_up': {
-                'loss_rate_mapping': self.loss_rate_mapping_up,
-                'valid_loss_values': self.valid_loss_values_up
+            "loss_rate_up": {
+                "loss_rate_mapping": self.loss_rate_mapping_up,
+                "valid_loss_values": self.valid_loss_values_up,
             },
-            'loss_rate_down': {
-                'loss_rate_mapping': self.loss_rate_mapping_down,
-                'valid_loss_values': self.valid_loss_values_down
-            }
+            "loss_rate_down": {
+                "loss_rate_mapping": self.loss_rate_mapping_down,
+                "valid_loss_values": self.valid_loss_values_down,
+            },
         }
         self.normalizer.normalization_params = normalization_params
 
@@ -195,7 +199,9 @@ class TrainingManager:
         Returns:
             归一化后的特征数据
         """
-        logger.warning("_normalize_features方法已废弃，数据在TrainingDataPreprocessor中已归一化，直接返回sequences数据")
+        logger.warning(
+            "_normalize_features方法已废弃，数据在TrainingDataPreprocessor中已归一化，直接返回sequences数据"
+        )
         return self.sequences
 
     def _reshape_data(self, _features_norm):
@@ -228,34 +234,41 @@ class TrainingManager:
         # 原始数据形状: (num_sequences, seq_len, 4)
         num_sequences = len(self.sequences)
         num_batches = num_sequences // batch_size
-        if num_sequences % batch_size != 0:
-            num_batches += 1
 
-        # 调整数据长度以适应批次大小
-        adjusted_sequences = num_batches * batch_size
-        if adjusted_sequences > num_sequences:
-            # 补零到最近的批次边界
-            pad_length = adjusted_sequences - num_sequences
-            sequences_padded = np.pad(self.sequences, ((0, pad_length), (0, 0), (0, 0)), mode='constant')
-            conditions_padded = np.pad(self.conditions, ((0, pad_length), (0, 0)), mode='constant')
-            behavior_ids_padded = np.pad(self.behavior_ids, (0, pad_length), mode='constant')
+        # 只使用完整的batch，丢弃不完整的batch
+        if num_batches > 0:
+            # 截取完整的batch数据
+            sequences_padded = self.sequences[: num_batches * batch_size]
+            conditions_padded = self.conditions[: num_batches * batch_size]
+            behavior_ids_padded = self.behavior_ids[: num_batches * batch_size]
         else:
+            # 如果没有完整的batch，使用全部数据，调整batch_size为样本数量
+            batch_size = num_sequences  # 调整batch_size为实际样本数量
             sequences_padded = self.sequences
             conditions_padded = self.conditions
             behavior_ids_padded = self.behavior_ids
+            num_batches = 1
 
         # 重塑为批次形状
         # 形状: (num_batches, batch_size, seq_len, 4)
-        sequences_reshaped = sequences_padded.reshape(num_batches, batch_size, batch_seq_len, input_dim)
+        sequences_reshaped = sequences_padded.reshape(
+            num_batches, batch_size, batch_seq_len, input_dim
+        )
         # 条件向量形状: (num_batches, batch_size, cond_dim)
         conditions_reshaped = conditions_padded.reshape(num_batches, batch_size, -1)
         # 行为ID形状: (num_batches, batch_size)
         behavior_ids_reshaped = behavior_ids_padded.reshape(num_batches, batch_size)
 
         # 转换为张量并移动到设备
-        sequences_tensor = torch.tensor(sequences_reshaped, dtype=torch.float32).to(self.device)
-        conditions_tensor = torch.tensor(conditions_reshaped, dtype=torch.float32).to(self.device)
-        behavior_ids_tensor = torch.tensor(behavior_ids_reshaped, dtype=torch.long).to(self.device)
+        sequences_tensor = torch.tensor(sequences_reshaped, dtype=torch.float32).to(
+            self.device
+        )
+        conditions_tensor = torch.tensor(conditions_reshaped, dtype=torch.float32).to(
+            self.device
+        )
+        behavior_ids_tensor = torch.tensor(behavior_ids_reshaped, dtype=torch.long).to(
+            self.device
+        )
 
         return sequences_tensor, conditions_tensor, behavior_ids_tensor
 
@@ -265,37 +278,38 @@ class TrainingManager:
 
         # 构建归一化参数字典，用于模型保存，支持上下行独立参数
         normalization_params = {
-            'delay_up': {
-                'normalization_method': 'robust',
-                'delay_scaler_center_': self.delay1_scaler_center_,
-                'delay_scaler_scale_': self.delay1_scaler_scale_,
-                'robust_scale_min': self.delay1_robust_scale_min,
-                'robust_scale_max': self.delay1_robust_scale_max,
-                'clipped_min': self.delay1_clipped_min,
-                'clipped_max': self.delay1_clipped_max,
-                'original_min': self.preprocess_data.get('original_min', 0.0),
-                'use_log_transform': self.use_log_transform
+            "delay_up": {
+                "normalization_method": "robust",
+                "delay_scaler_center_": self.delay1_scaler_center_,
+                "delay_scaler_scale_": self.delay1_scaler_scale_,
+                "robust_scale_min": self.delay1_robust_scale_min,
+                "robust_scale_max": self.delay1_robust_scale_max,
+                "clipped_min": self.delay1_clipped_min,
+                "clipped_max": self.delay1_clipped_max,
+                "original_min": self.preprocess_data.get("original_min", 0.0),
             },
-            'delay_down': {
-                'normalization_method': 'robust',
-                'delay_scaler_center_': self.delay2_scaler_center_,
-                'delay_scaler_scale_': self.delay2_scaler_scale_,
-                'robust_scale_min': self.delay2_robust_scale_min,
-                'robust_scale_max': self.delay2_robust_scale_max,
-                'clipped_min': self.delay2_clipped_min,
-                'clipped_max': self.delay2_clipped_max,
-                'original_min': self.preprocess_data.get('original_min', 0.0),
-                'use_log_transform': self.use_log_transform
+            "delay_down": {
+                "normalization_method": "robust",
+                "delay_scaler_center_": self.delay2_scaler_center_,
+                "delay_scaler_scale_": self.delay2_scaler_scale_,
+                "robust_scale_min": self.delay2_robust_scale_min,
+                "robust_scale_max": self.delay2_robust_scale_max,
+                "clipped_min": self.delay2_clipped_min,
+                "clipped_max": self.delay2_clipped_max,
+                "original_min": self.preprocess_data.get("original_min", 0.0),
             },
-            'loss_rate_up': {
-                'loss_rate_mapping': self.loss_rate_mapping_up,
-                'valid_loss_values': self.valid_loss_values_up
+            "loss_rate_up": {
+                "loss_rate_mapping": self.loss_rate_mapping_up,
+                "valid_loss_values": self.valid_loss_values_up,
             },
-            'loss_rate_down': {
-                'loss_rate_mapping': self.loss_rate_mapping_down,
-                'valid_loss_values': self.valid_loss_values_down
-            }
+            "loss_rate_down": {
+                "loss_rate_mapping": self.loss_rate_mapping_down,
+                "valid_loss_values": self.valid_loss_values_down,
+            },
         }
+
+        # 从预处理数据中获取条件维度
+        cond_dim = self.conditions.shape[1] if self.conditions is not None else 8
 
         # 初始化条件扩散模型，支持4D输入
         self.model = ConditionDiffusionModel(
@@ -303,7 +317,7 @@ class TrainingManager:
             behavior_embed_dim=32,  # 行为嵌入维度
             T=1000,  # 扩散步数
             normalization_params=normalization_params,
-            cond_dim=8  # 条件维度，与条件向量形状匹配
+            cond_dim=cond_dim,  # 条件维度，与条件向量形状匹配
         )
         self.model.to(self.device)
 
@@ -322,7 +336,9 @@ class TrainingManager:
         features_norm = self._normalize_features()
 
         # 重塑数据，获取4D序列张量和条件向量张量
-        sequences_tensor, conditions_tensor, behavior_ids_tensor = self._reshape_data(features_norm)
+        sequences_tensor, conditions_tensor, behavior_ids_tensor = self._reshape_data(
+            features_norm
+        )
 
         # 初始化模型
         self._init_model()
@@ -338,7 +354,9 @@ class TrainingManager:
         num_batches = sequences_tensor.shape[0]
 
         logger.info(f"开始在 {self.device} 上训练")
-        logger.info(f"原始数据形状: ({sequences_tensor.shape[1] * sequences_tensor.shape[2] * num_batches}, {sequences_tensor.shape[3]})")
+        logger.info(
+            f"原始数据形状: ({sequences_tensor.shape[1] * sequences_tensor.shape[2] * num_batches}, {sequences_tensor.shape[3]})"
+        )
         logger.info(f"批次数据形状: {sequences_tensor.shape}")
         logger.info(f"条件向量形状: {conditions_tensor.shape}")
         logger.info(f"批次数量: {num_batches}")
@@ -362,16 +380,22 @@ class TrainingManager:
                 # 扩展条件向量到序列长度维度
                 # 从 (batch_size, cond_dim) 扩展到 (batch_size, seq_len, cond_dim)
                 batch_seq_len = batch_sequences.shape[1]
-                batch_conditions_expanded = batch_conditions.unsqueeze(1).expand(-1, batch_seq_len, -1)
+                batch_conditions_expanded = batch_conditions.unsqueeze(1).expand(
+                    -1, batch_seq_len, -1
+                )
 
                 # 计算损失，使用条件向量而不是行为ID
-                loss = self.model.compute_loss(batch_sequences, condition_vector=batch_conditions_expanded)
+                loss = self.model.compute_loss(
+                    batch_sequences, condition_vector=batch_conditions_expanded
+                )
 
                 # 反向传播和优化
                 loss.backward()
 
                 # 梯度裁剪，防止梯度爆炸
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), gradient_clip_value)
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), gradient_clip_value
+                )
 
                 self.optimizer.step()
 
@@ -384,26 +408,46 @@ class TrainingManager:
 
                 # 反归一化，使用新的4D反归一化方法
                 delay1, loss1, delay2, loss2 = self.normalizer.denormalize4d(
-                    batch_sequences_np[:, 0], batch_sequences_np[:, 1],
-                    batch_sequences_np[:, 2], batch_sequences_np[:, 3]
+                    batch_sequences_np[:, 0],
+                    batch_sequences_np[:, 1],
+                    batch_sequences_np[:, 2],
+                    batch_sequences_np[:, 3],
                 )
 
                 # 打印反归一化前后的数据统计
                 logger.info(f"\n调试信息 - Epoch {epoch+1}:")
-                logger.info(f"归一化延迟1 - Min: {np.min(batch_sequences_np[:, 0]):.4f}, Max: {np.max(batch_sequences_np[:, 0]):.4f}, Mean: {np.mean(batch_sequences_np[:, 0]):.4f}")
-                logger.info(f"反归一化延迟1 - Min: {np.min(delay1):.4f}, Max: {np.max(delay1):.4f}, Mean: {np.mean(delay1):.4f}")
-                logger.info(f"归一化丢包率1 - Min: {np.min(batch_sequences_np[:, 1]):.4f}, Max: {np.max(batch_sequences_np[:, 1]):.4f}, Mean: {np.mean(batch_sequences_np[:, 1]):.4f}")
-                logger.info(f"反归一化丢包率1 - Min: {np.min(loss1):.4f}, Max: {np.max(loss1):.4f}, Mean: {np.mean(loss1):.4f}")
-                logger.info(f"归一化延迟2 - Min: {np.min(batch_sequences_np[:, 2]):.4f}, Max: {np.max(batch_sequences_np[:, 2]):.4f}, Mean: {np.mean(batch_sequences_np[:, 2]):.4f}")
-                logger.info(f"反归一化延迟2 - Min: {np.min(delay2):.4f}, Max: {np.max(delay2):.4f}, Mean: {np.mean(delay2):.4f}")
-                logger.info(f"归一化丢包率2 - Min: {np.min(batch_sequences_np[:, 3]):.4f}, Max: {np.max(batch_sequences_np[:, 3]):.4f}, Mean: {np.mean(batch_sequences_np[:, 3]):.4f}")
-                logger.info(f"反归一化丢包率2 - Min: {np.min(loss2):.4f}, Max: {np.max(loss2):.4f}, Mean: {np.mean(loss2):.4f}")
+                logger.info(
+                    f"归一化延迟1 - Min: {np.min(batch_sequences_np[:, 0]):.4f}, Max: {np.max(batch_sequences_np[:, 0]):.4f}, Mean: {np.mean(batch_sequences_np[:, 0]):.4f}"
+                )
+                logger.info(
+                    f"反归一化延迟1 - Min: {np.min(delay1):.4f}, Max: {np.max(delay1):.4f}, Mean: {np.mean(delay1):.4f}"
+                )
+                logger.info(
+                    f"归一化丢包率1 - Min: {np.min(batch_sequences_np[:, 1]):.4f}, Max: {np.max(batch_sequences_np[:, 1]):.4f}, Mean: {np.mean(batch_sequences_np[:, 1]):.4f}"
+                )
+                logger.info(
+                    f"反归一化丢包率1 - Min: {np.min(loss1):.4f}, Max: {np.max(loss1):.4f}, Mean: {np.mean(loss1):.4f}"
+                )
+                logger.info(
+                    f"归一化延迟2 - Min: {np.min(batch_sequences_np[:, 2]):.4f}, Max: {np.max(batch_sequences_np[:, 2]):.4f}, Mean: {np.mean(batch_sequences_np[:, 2]):.4f}"
+                )
+                logger.info(
+                    f"反归一化延迟2 - Min: {np.min(delay2):.4f}, Max: {np.max(delay2):.4f}, Mean: {np.mean(delay2):.4f}"
+                )
+                logger.info(
+                    f"归一化丢包率2 - Min: {np.min(batch_sequences_np[:, 3]):.4f}, Max: {np.max(batch_sequences_np[:, 3]):.4f}, Mean: {np.mean(batch_sequences_np[:, 3]):.4f}"
+                )
+                logger.info(
+                    f"反归一化丢包率2 - Min: {np.min(loss2):.4f}, Max: {np.max(loss2):.4f}, Mean: {np.mean(loss2):.4f}"
+                )
 
             # 计算平均损失
             avg_epoch_loss = epoch_loss / num_batches
             loss_history.append(avg_epoch_loss)
 
-            logger.info(f"训练轮次 [{epoch + 1}/{num_epochs}], 平均损失值: {avg_epoch_loss:.4f}")
+            logger.info(
+                f"训练轮次 [{epoch + 1}/{num_epochs}], 平均损失值: {avg_epoch_loss:.4f}"
+            )
 
             # 保存最佳模型
             if avg_epoch_loss < best_loss:
@@ -443,16 +487,12 @@ class TrainingManager:
             "optimizer_state_dict": self.optimizer.state_dict(),
             "loss": loss,
             "normalization_method": self.normalization_method,
-            "use_log_transform": self.use_log_transform,
-
             # 上下行独立的合法丢包值
             "valid_loss_values_up": self.valid_loss_values_up,
             "valid_loss_values_down": self.valid_loss_values_down,
-
             # 上下行独立的丢包率映射
             "loss_rate_mapping_up": self.loss_rate_mapping_up,
             "loss_rate_mapping_down": self.loss_rate_mapping_down,
-
             # 上行归一化参数
             "delay1_scaler_center_": self.delay1_scaler_center_,
             "delay1_scaler_scale_": self.delay1_scaler_scale_,
@@ -460,7 +500,6 @@ class TrainingManager:
             "delay1_robust_scale_max": self.delay1_robust_scale_max,
             "delay1_clipped_min": self.delay1_clipped_min,
             "delay1_clipped_max": self.delay1_clipped_max,
-
             # 下行归一化参数
             "delay2_scaler_center_": self.delay2_scaler_center_,
             "delay2_scaler_scale_": self.delay2_scaler_scale_,
@@ -468,6 +507,8 @@ class TrainingManager:
             "delay2_robust_scale_max": self.delay2_robust_scale_max,
             "delay2_clipped_min": self.delay2_clipped_min,
             "delay2_clipped_max": self.delay2_clipped_max,
+            # 条件维度
+            "cond_dim": self.model.cond_dim,
         }
 
         # 保存模型

@@ -13,19 +13,57 @@ from umap import UMAP
 from pathlib import Path
 from typing import List
 
+from network_simulation.utils.logger import get_logger
 from .base_visualizer import BaseVisualizer
 
+# 初始化日志记录器
+logger = get_logger(__name__)
+
 # 忽略UMAP的n_jobs被random_state覆盖的警告
-warnings.filterwarnings("ignore", message="n_jobs value .* overridden to .* by setting random_state")
+warnings.filterwarnings(
+    "ignore", message="n_jobs value .* overridden to .* by setting random_state"
+)
 
 
 class FeatureSpaceVisualizer(BaseVisualizer):
-    """特征空间可视化类"""
+    """特征空间可视化类
+
+    该类用于对网络行为特征进行降维和可视化，支持PCA、t-SNE和UMAP等多种降维方法，
+    并能生成各种可视化图表用于分析网络行为模式。
+    """
 
     def visualize_pca_scatter(
         self, X: np.ndarray, labels: np.ndarray, method: str
     ) -> str:
-        """可视化PCA散点图并返回HTML片段"""
+        """可视化PCA散点图并返回HTML片段
+
+        使用主成分分析(PCA)对特征空间进行降维，并可视化不同行为模式的分布。
+
+        Args:
+            X (np.ndarray): 特征矩阵，shape (n_samples, n_features)
+            labels (np.ndarray): 行为标签数组，shape (n_samples,)
+            method (str): 可视化方法名称，用于区分不同的可视化结果
+
+        Returns:
+            str: 包含PCA散点图和统计摘要的HTML片段
+
+        Examples:
+            >>> from network_simulation.visualization.feature_space_visualizer import FeatureSpaceVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> feature_visualizer = FeatureSpaceVisualizer(Path("output/visualizations"))
+            >>> X = np.random.randn(100, 12)
+            >>> labels = np.random.randint(0, 3, 100)
+            >>> html = feature_visualizer.visualize_pca_scatter(X, labels, "rule")
+            >>> print(html[:100])  # 显示HTML片段的前100个字符
+        """
+        # 检查是否所有标签都是INVALID (-1)
+        if len(np.unique(labels)) == 1 and np.unique(labels)[0] == -1:
+            logger.warning(
+                "All labels are INVALID (-1), skipping PCA scatter visualization."
+            )
+            return "<p>无有效行为标签，跳过PCA散点图可视化。</p>"
+
         # 执行PCA
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X)
@@ -38,7 +76,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             xlabel=f"PCA 维度 1 ({pca.explained_variance_ratio_[0]:.2%} 方差)",
             ylabel=f"PCA 维度 2 ({pca.explained_variance_ratio_[1]:.2%} 方差)",
             show_evolution=True,
-            method=method
+            method=method,
         )
 
         # 保存图表到缓冲区并返回base64
@@ -58,10 +96,31 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         </div>
         """
 
-        return f'<img src="data:image/png;base64,{img_base64}" alt="PCA 散点图">{summary}'
+        return (
+            f'<img src="data:image/png;base64,{img_base64}" alt="PCA 散点图">{summary}'
+        )
 
     def visualize_pca_variance(self, X: np.ndarray, method: str) -> str:
-        """可视化PCA方差解释并返回HTML片段"""
+        """可视化PCA方差解释并返回HTML片段
+
+        可视化PCA降维后各主成分的方差解释比例，用于评估降维效果。
+
+        Args:
+            X (np.ndarray): 特征矩阵，shape (n_samples, n_features)
+            method (str): 可视化方法名称，用于区分不同的可视化结果
+
+        Returns:
+            str: 包含PCA方差解释图的HTML片段
+
+        Examples:
+            >>> from network_simulation.visualization.feature_space_visualizer import FeatureSpaceVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> feature_visualizer = FeatureSpaceVisualizer(Path("output/visualizations"))
+            >>> X = np.random.randn(100, 12)
+            >>> html = feature_visualizer.visualize_pca_variance(X, "rule")
+            >>> print(html[:100])  # 显示HTML片段的前100个字符
+        """
         # 执行PCA
         pca = PCA(n_components=min(8, X.shape[1]))
         pca.fit(X)
@@ -98,7 +157,36 @@ class FeatureSpaceVisualizer(BaseVisualizer):
     def visualize_tsne_scatter(
         self, X: np.ndarray, labels: np.ndarray, method: str
     ) -> str:
-        """可视化t-SNE散点图并返回HTML片段"""
+        """可视化t-SNE散点图并返回HTML片段
+
+        使用t-SNE(t-distributed Stochastic Neighbor Embedding)对特征空间进行降维，
+        并可视化不同行为模式的分布，适合展示高维数据的聚类结构。
+
+        Args:
+            X (np.ndarray): 特征矩阵，shape (n_samples, n_features)
+            labels (np.ndarray): 行为标签数组，shape (n_samples,)
+            method (str): 可视化方法名称，用于区分不同的可视化结果
+
+        Returns:
+            str: 包含t-SNE散点图和统计摘要的HTML片段
+
+        Examples:
+            >>> from network_simulation.visualization.feature_space_visualizer import FeatureSpaceVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> feature_visualizer = FeatureSpaceVisualizer(Path("output/visualizations"))
+            >>> X = np.random.randn(100, 12)
+            >>> labels = np.random.randint(0, 3, 100)
+            >>> html = feature_visualizer.visualize_tsne_scatter(X, labels, "rule")
+            >>> print(html[:100])  # 显示HTML片段的前100个字符
+        """
+        # 检查是否所有标签都是INVALID (-1)
+        if len(np.unique(labels)) == 1 and np.unique(labels)[0] == -1:
+            logger.warning(
+                "All labels are INVALID (-1), skipping t-SNE scatter visualization."
+            )
+            return "<p>无有效行为标签，跳过t-SNE散点图可视化。</p>"
+
         # 执行t-SNE
         perplexity = 30
         max_iter = 300
@@ -114,7 +202,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             title=f"{'规则' if method == 'rule' else method} 行为检测结果 t-SNE 散点图 (perplexity={perplexity}, max_iter={max_iter})",
             xlabel=f"t-SNE 维度 1 (perplexity={perplexity})",
             ylabel=f"t-SNE 维度 2 (max_iter={max_iter})",
-            show_evolution=True
+            show_evolution=True,
         )
 
         # 保存图表到缓冲区
@@ -139,7 +227,36 @@ class FeatureSpaceVisualizer(BaseVisualizer):
     def visualize_umap_scatter(
         self, X: np.ndarray, labels: np.ndarray, method: str
     ) -> str:
-        """可视化UMAP散点图并返回HTML片段"""
+        """可视化UMAP散点图并返回HTML片段
+
+        使用UMAP(Uniform Manifold Approximation and Projection)对特征空间进行降维，
+        并可视化不同行为模式的分布，适合保留高维数据的局部结构。
+
+        Args:
+            X (np.ndarray): 特征矩阵，shape (n_samples, n_features)
+            labels (np.ndarray): 行为标签数组，shape (n_samples,)
+            method (str): 可视化方法名称，用于区分不同的可视化结果
+
+        Returns:
+            str: 包含UMAP散点图和统计摘要的HTML片段
+
+        Examples:
+            >>> from network_simulation.visualization.feature_space_visualizer import FeatureSpaceVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> feature_visualizer = FeatureSpaceVisualizer(Path("output/visualizations"))
+            >>> X = np.random.randn(100, 12)
+            >>> labels = np.random.randint(0, 3, 100)
+            >>> html = feature_visualizer.visualize_umap_scatter(X, labels, "rule")
+            >>> print(html[:100])  # 显示HTML片段的前100个字符
+        """
+        # 检查是否所有标签都是INVALID (-1)
+        if len(np.unique(labels)) == 1 and np.unique(labels)[0] == -1:
+            logger.warning(
+                "All labels are INVALID (-1), skipping UMAP scatter visualization."
+            )
+            return "<p>无有效行为标签，跳过UMAP散点图可视化。</p>"
+
         # 执行UMAP
         n_neighbors = 15
         min_dist = 0.1
@@ -155,7 +272,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             title=f"{'规则' if method == 'rule' else method} 行为检测结果 UMAP 散点图 (n_neighbors={n_neighbors}, min_dist={min_dist})",
             xlabel=f"UMAP 维度 1 (n_neighbors={n_neighbors})",
             ylabel=f"UMAP 维度 2 (min_dist={min_dist})",
-            show_evolution=True
+            show_evolution=True,
         )
 
         # 保存图表到缓冲区
@@ -176,20 +293,47 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         </div>
         """
 
-        return f'<img src="data:image/png;base64,{img_base64}" alt="UMAP 散点图">{summary}'
+        return (
+            f'<img src="data:image/png;base64,{img_base64}" alt="UMAP 散点图">{summary}'
+        )
 
     def generate_behavior_separation_plots(
-        self, X: np.ndarray, labels: np.ndarray, output_dir: Path, feature_names: List[str] = None, direction: str = "up"
+        self,
+        X: np.ndarray,
+        labels: np.ndarray,
+        output_dir: Path,
+        feature_names: List[str] = None,
+        direction: str = "up",
     ) -> None:
         """生成行为分离可视化图表
 
+        生成特征分布箱线图和特征相关性热力图，用于分析不同行为模式的特征差异。
+
         Args:
-            X: 特征矩阵
-            labels: 标签向量
-            output_dir: 输出目录
-            feature_names: 特征名称列表
-            direction: 方向（"up" 或 "down"）
+            X (np.ndarray): 特征矩阵，shape (n_samples, n_features)
+            labels (np.ndarray): 行为标签数组，shape (n_samples,)
+            output_dir (Path): 输出目录路径
+            feature_names (List[str], optional): 特征名称列表，默认为None
+            direction (str, optional): 方向，"up"表示上行数据，"down"表示下行数据，默认为"up"
+
+        Examples:
+            >>> from network_simulation.visualization.feature_space_visualizer import FeatureSpaceVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> feature_visualizer = FeatureSpaceVisualizer(Path("output/visualizations"))
+            >>> X = np.random.randn(100, 6)
+            >>> labels = np.random.randint(0, 3, 100)
+            >>> feature_names = ["delay1_mean", "delay2_mean", "loss1_mean", "loss2_mean", "ratio", "symmetry"]
+            >>> output_dir = Path("output/visualizations/behavior_separation")
+            >>> feature_visualizer.generate_behavior_separation_plots(X, labels, output_dir, feature_names, "up")
         """
+        # 检查是否所有标签都是INVALID (-1)
+        if len(np.unique(labels)) == 1 and np.unique(labels)[0] == -1:
+            logger.warning(
+                "All labels are INVALID (-1), skipping behavior separation plots."
+            )
+            return
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # 根据方向选择对应的特征
@@ -197,16 +341,24 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             # 为当前方向选择对应的特征
             if direction == "up":
                 # 上行特征：包含1或ratio或symmetry的特征
-                selected_feature_mask = [col.endswith("1") or "ratio" in col or "symmetry" in col
-                                       for col in feature_names]
+                selected_feature_mask = [
+                    col.endswith("1") or "ratio" in col or "symmetry" in col
+                    for col in feature_names
+                ]
             else:
                 # 下行特征：包含2或ratio或symmetry的特征
-                selected_feature_mask = [col.endswith("2") or "ratio" in col or "symmetry" in col
-                                       for col in feature_names]
+                selected_feature_mask = [
+                    col.endswith("2") or "ratio" in col or "symmetry" in col
+                    for col in feature_names
+                ]
 
             # 过滤特征
             X = X[:, selected_feature_mask]
-            feature_names = [name for name, selected in zip(feature_names, selected_feature_mask) if selected]
+            feature_names = [
+                name
+                for name, selected in zip(feature_names, selected_feature_mask)
+                if selected
+            ]
 
         # 使用过滤后的特征名称或默认名称
         if feature_names is None:
@@ -229,7 +381,9 @@ class FeatureSpaceVisualizer(BaseVisualizer):
 
         plt.tight_layout()
         plt.savefig(
-            output_dir / f"{direction}_feature_distributions.png", dpi=300, bbox_inches="tight"
+            output_dir / f"{direction}_feature_distributions.png",
+            dpi=300,
+            bbox_inches="tight",
         )
         plt.close()
 
@@ -237,13 +391,21 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         if n_features > 1:
             plt.figure(figsize=(10, 8))
             corr_matrix = np.corrcoef(X.T)
-            sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="coolwarm", square=True,
-                       xticklabels=feature_names[:min(n_features, 10)],
-                       yticklabels=feature_names[:min(n_features, 10)])
+            sns.heatmap(
+                corr_matrix,
+                annot=True,
+                fmt=".2f",
+                cmap="coolwarm",
+                square=True,
+                xticklabels=feature_names[: min(n_features, 10)],
+                yticklabels=feature_names[: min(n_features, 10)],
+            )
             plt.title(f"{direction.upper()} 特征相关性热力图")
             plt.tight_layout()
             plt.savefig(
-                output_dir / f"{direction}_feature_correlation.png", dpi=300, bbox_inches="tight"
+                output_dir / f"{direction}_feature_correlation.png",
+                dpi=300,
+                bbox_inches="tight",
             )
             plt.close()
 
@@ -256,8 +418,36 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         _feature_names: List[str],
         direction: str = "up",
     ) -> None:
-        """保存特征空间降维图"""
+        """保存特征空间降维图
+
+        保存PCA、t-SNE和UMAP等多种降维方法的可视化结果到指定目录。
+
+        Args:
+            X (np.ndarray): 特征矩阵，shape (n_samples, n_features)
+            labels (List[int]): 行为标签列表
+            _method (str): 可视化方法名称（未使用）
+            output_dir (Path): 输出目录路径
+            _feature_names (List[str]): 特征名称列表（未使用）
+            direction (str, optional): 方向，"up"表示上行数据，"down"表示下行数据，默认为"up"
+
+        Examples:
+            >>> from network_simulation.visualization.feature_space_visualizer import FeatureSpaceVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> feature_visualizer = FeatureSpaceVisualizer(Path("output/visualizations"))
+            >>> X = np.random.randn(100, 12)
+            >>> labels = list(np.random.randint(0, 3, 100))
+            >>> output_dir = Path("output/visualizations/feature_space")
+            >>> feature_visualizer.save_feature_space_visualizations(X, labels, "rule", output_dir, None, "up")
+        """
         labels = np.array(labels)
+
+        # 检查是否所有标签都是INVALID (-1)
+        if len(np.unique(labels)) == 1 and np.unique(labels)[0] == -1:
+            logger.warning(
+                "All labels are INVALID (-1), skipping feature space visualizations."
+            )
+            return
 
         # 保存PCA散点图
         pca = PCA(n_components=2)
@@ -268,7 +458,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             title=f"{direction.upper()} 行为特征 PCA 散点图",
             xlabel=f"PCA 维度 1 ({pca.explained_variance_ratio_[0]:.2%} 方差)",
             ylabel=f"PCA 维度 2 ({pca.explained_variance_ratio_[1]:.2%} 方差)",
-            show_evolution=True
+            show_evolution=True,
         )
         self._save_plot(output_dir / f"{direction}_pca_scatter.png")
 
@@ -301,27 +491,37 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         self._save_plot(output_dir / f"{direction}_pca_variance.png")
 
         # 保存t-SNE散点图
-        tsne = TSNE(n_components=2, random_state=42, perplexity=30, max_iter=300)
-        X_tsne = tsne.fit_transform(X)
-        self._create_scatter_plot(
-            X_transformed=X_tsne,
-            labels=labels,
-            title=f"{direction.upper()} 行为特征 t-SNE 降维图",
-            xlabel="t-SNE 维度 1",
-            ylabel="t-SNE 维度 2",
-            show_evolution=True
-        )
-        self._save_plot(output_dir / f"{direction}_tsne.png")
+        # 只有当样本数量大于perplexity时才运行t-SNE
+        if len(X) > 10:  # 确保有足够的样本
+            perplexity = min(30, len(X) - 1)  # perplexity必须小于样本数量
+            tsne = TSNE(
+                n_components=2, random_state=42, perplexity=perplexity, max_iter=300
+            )
+            X_tsne = tsne.fit_transform(X)
+            self._create_scatter_plot(
+                X_transformed=X_tsne,
+                labels=labels,
+                title=f"{direction.upper()} 行为特征 t-SNE 降维图",
+                xlabel="t-SNE 维度 1",
+                ylabel="t-SNE 维度 2",
+                show_evolution=True,
+            )
+            self._save_plot(output_dir / f"{direction}_tsne.png")
 
         # 保存UMAP散点图
-        umap = UMAP(n_components=2, random_state=42, n_neighbors=15, min_dist=0.1)
-        X_umap = umap.fit_transform(X)
-        self._create_scatter_plot(
-            X_transformed=X_umap,
-            labels=labels,
-            title=f"{direction.upper()} 行为特征 UMAP 降维图",
-            xlabel="UMAP 维度 1",
-            ylabel="UMAP 维度 2",
-            show_evolution=True
-        )
-        self._save_plot(output_dir / f"{direction}_umap.png")
+        # 只有当样本数量大于n_neighbors时才运行UMAP
+        if len(X) > 10:  # 确保有足够的样本
+            n_neighbors = min(15, len(X) - 1)  # n_neighbors必须小于样本数量
+            umap = UMAP(
+                n_components=2, random_state=42, n_neighbors=n_neighbors, min_dist=0.1
+            )
+            X_umap = umap.fit_transform(X)
+            self._create_scatter_plot(
+                X_transformed=X_umap,
+                labels=labels,
+                title=f"{direction.upper()} 行为特征 UMAP 降维图",
+                xlabel="UMAP 维度 1",
+                ylabel="UMAP 维度 2",
+                show_evolution=True,
+            )
+            self._save_plot(output_dir / f"{direction}_umap.png")

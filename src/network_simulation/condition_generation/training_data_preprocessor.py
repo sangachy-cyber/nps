@@ -31,7 +31,10 @@ class TrainingDataPreprocessor:
         self.stride = DEFAULT_STRIDE  # 从配置文件加载
 
     def preprocess_data(
-        self, input_patterns_dir: Path, input_processed_file: Path, output_preprocess_dir: Path
+        self,
+        input_patterns_dir: Path,
+        input_processed_file: Path,
+        output_preprocess_dir: Path,
     ) -> Path:
         """预处理扩散模型训练数据
 
@@ -61,28 +64,40 @@ class TrainingDataPreprocessor:
         # 1. 加载窗口特征矩阵
         window_features_file = input_patterns_dir / "window_features_rule.npy"
         if not window_features_file.exists():
-            raise FileNotFoundError(f"在 {input_patterns_dir} 中未找到 window_features_rule.npy 文件")
+            raise FileNotFoundError(
+                f"在 {input_patterns_dir} 中未找到 window_features_rule.npy 文件"
+            )
         window_features = np.load(window_features_file)
         num_windows = window_features.shape[0]
-        logger.info(f"加载窗口特征矩阵，形状: {window_features.shape}, 窗口数量: {num_windows}")
+        logger.info(
+            f"加载窗口特征矩阵，形状: {window_features.shape}, 窗口数量: {num_windows}"
+        )
 
         # 2. 加载上下行独立的合法丢包值
         valid_loss_values_up = None
         valid_loss_values_down = None
 
         # 优先加载上下行独立的合法丢包值
-        valid_loss_up_file = input_patterns_dir / "metadata" / "valid_loss_values_up.json"
-        valid_loss_down_file = input_patterns_dir / "metadata" / "valid_loss_values_down.json"
+        valid_loss_up_file = (
+            input_patterns_dir / "metadata" / "valid_loss_values_up.json"
+        )
+        valid_loss_down_file = (
+            input_patterns_dir / "metadata" / "valid_loss_values_down.json"
+        )
 
         if valid_loss_up_file.exists() and valid_loss_down_file.exists():
             with open(valid_loss_up_file, "r") as f:
                 valid_loss_values_up = json.load(f)
             with open(valid_loss_down_file, "r") as f:
                 valid_loss_values_down = json.load(f)
-            logger.info(f"加载上下行独立合法丢包值: 上行 {valid_loss_values_up}, 下行 {valid_loss_values_down}")
+            logger.info(
+                f"加载上下行独立合法丢包值: 上行 {valid_loss_values_up}, 下行 {valid_loss_values_down}"
+            )
         else:
             # 兼容旧版本，加载合并的合法丢包值
-            valid_loss_values_file = input_patterns_dir / "metadata" / "valid_loss_values.json"
+            valid_loss_values_file = (
+                input_patterns_dir / "metadata" / "valid_loss_values.json"
+            )
             if valid_loss_values_file.exists():
                 with open(valid_loss_values_file, "r") as f:
                     valid_loss_values = json.load(f)
@@ -92,8 +107,8 @@ class TrainingDataPreprocessor:
                 logger.info(f"加载合并合法丢包值: {valid_loss_values}")
             else:
                 # 使用默认合法丢包值
-                valid_loss_values_up = [0.0, 1/3, 0.5, 2/3, 1.0]
-                valid_loss_values_down = [0.0, 1/3, 0.5, 2/3, 1.0]
+                valid_loss_values_up = [0.0, 1 / 3, 0.5, 2 / 3, 1.0]
+                valid_loss_values_down = [0.0, 1 / 3, 0.5, 2 / 3, 1.0]
                 logger.info("使用默认合法丢包值")
 
         # 3. 加载处理后的数据文件
@@ -106,6 +121,7 @@ class TrainingDataPreprocessor:
         # 4. 从处理后的数据中提取窗口数据
         # 初始化归一化器
         from .normalization import Normalizer
+
         normalizer = Normalizer(valid_loss_values_up, valid_loss_values_down)
 
         # 统计归一化前的数据范围
@@ -124,7 +140,9 @@ class TrainingDataPreprocessor:
         # 使用较小的窗口数量
         actual_num_windows = min(num_windows, calculated_num_windows)
         if actual_num_windows != num_windows:
-            logger.warning(f"特征矩阵窗口数量 {num_windows} 大于计算的窗口数量 {calculated_num_windows}，使用 {actual_num_windows} 个窗口")
+            logger.warning(
+                f"特征矩阵窗口数量 {num_windows} 大于计算的窗口数量 {calculated_num_windows}，使用 {actual_num_windows} 个窗口"
+            )
             window_features = window_features[:actual_num_windows]
 
         # 生成所有窗口的数据
@@ -145,7 +163,9 @@ class TrainingDataPreprocessor:
             # 检查是否包含必要的列
             required_cols = {"delay1", "loss_rate1", "delay2", "loss_rate2"}
             if not required_cols.issubset(window_df.columns):
-                logger.warning(f"窗口 {i} 缺少必要列，当前列: {list(window_df.columns)}, 必要列: {list(required_cols)}，跳过")
+                logger.warning(
+                    f"窗口 {i} 缺少必要列，当前列: {list(window_df.columns)}, 必要列: {list(required_cols)}，跳过"
+                )
                 continue
 
             valid_windows.append(i)
@@ -172,19 +192,37 @@ class TrainingDataPreprocessor:
         all_loss2 = np.array(all_loss2)
 
         logger.info("所有窗口数据统计:")
-        logger.info(f"  delay1 - 最小值: {np.min(all_delay1):.4f}, 最大值: {np.max(all_delay1):.4f}, 平均值: {np.mean(all_delay1):.4f}")
-        logger.info(f"  loss1 - 最小值: {np.min(all_loss1):.4f}, 最大值: {np.max(all_loss1):.4f}, 平均值: {np.mean(all_loss1):.4f}")
-        logger.info(f"  delay2 - 最小值: {np.min(all_delay2):.4f}, 最大值: {np.max(all_delay2):.4f}, 平均值: {np.mean(all_delay2):.4f}")
-        logger.info(f"  loss2 - 最小值: {np.min(all_loss2):.4f}, 最大值: {np.max(all_loss2):.4f}, 平均值: {np.mean(all_loss2):.4f}")
+        logger.info(
+            f"  delay1 - 最小值: {np.min(all_delay1):.4f}, 最大值: {np.max(all_delay1):.4f}, 平均值: {np.mean(all_delay1):.4f}"
+        )
+        logger.info(
+            f"  loss1 - 最小值: {np.min(all_loss1):.4f}, 最大值: {np.max(all_loss1):.4f}, 平均值: {np.mean(all_loss1):.4f}"
+        )
+        logger.info(
+            f"  delay2 - 最小值: {np.min(all_delay2):.4f}, 最大值: {np.max(all_delay2):.4f}, 平均值: {np.mean(all_delay2):.4f}"
+        )
+        logger.info(
+            f"  loss2 - 最小值: {np.min(all_loss2):.4f}, 最大值: {np.max(all_loss2):.4f}, 平均值: {np.mean(all_loss2):.4f}"
+        )
 
         # 归一化所有数据
-        delay1_norm, loss1_norm, delay2_norm, loss2_norm = normalizer.normalize4d(all_delay1, all_loss1, all_delay2, all_loss2)
+        delay1_norm, loss1_norm, delay2_norm, loss2_norm = normalizer.normalize4d(
+            all_delay1, all_loss1, all_delay2, all_loss2
+        )
 
         logger.info("归一化后数据统计:")
-        logger.info(f"  delay1_norm - 最小值: {np.min(delay1_norm):.4f}, 最大值: {np.max(delay1_norm):.4f}, 平均值: {np.mean(delay1_norm):.4f}")
-        logger.info(f"  loss1_norm - 最小值: {np.min(loss1_norm):.4f}, 最大值: {np.max(loss1_norm):.4f}, 平均值: {np.mean(loss1_norm):.4f}")
-        logger.info(f"  delay2_norm - 最小值: {np.min(delay2_norm):.4f}, 最大值: {np.max(delay2_norm):.4f}, 平均值: {np.mean(delay2_norm):.4f}")
-        logger.info(f"  loss2_norm - 最小值: {np.min(loss2_norm):.4f}, 最大值: {np.max(loss2_norm):.4f}, 平均值: {np.mean(loss2_norm):.4f}")
+        logger.info(
+            f"  delay1_norm - 最小值: {np.min(delay1_norm):.4f}, 最大值: {np.max(delay1_norm):.4f}, 平均值: {np.mean(delay1_norm):.4f}"
+        )
+        logger.info(
+            f"  loss1_norm - 最小值: {np.min(loss1_norm):.4f}, 最大值: {np.max(loss1_norm):.4f}, 平均值: {np.mean(loss1_norm):.4f}"
+        )
+        logger.info(
+            f"  delay2_norm - 最小值: {np.min(delay2_norm):.4f}, 最大值: {np.max(delay2_norm):.4f}, 平均值: {np.mean(delay2_norm):.4f}"
+        )
+        logger.info(
+            f"  loss2_norm - 最小值: {np.min(loss2_norm):.4f}, 最大值: {np.max(loss2_norm):.4f}, 平均值: {np.mean(loss2_norm):.4f}"
+        )
 
         # 然后将归一化后的数据拆分为窗口序列
         sequences = []
@@ -199,14 +237,21 @@ class TrainingDataPreprocessor:
             window_size = window_samples
 
             # 提取当前窗口的归一化数据
-            window_delay1_norm = delay1_norm[idx:idx+window_size]
-            window_loss1_norm = loss1_norm[idx:idx+window_size]
-            window_delay2_norm = delay2_norm[idx:idx+window_size]
-            window_loss2_norm = loss2_norm[idx:idx+window_size]
+            window_delay1_norm = delay1_norm[idx : idx + window_size]
+            window_loss1_norm = loss1_norm[idx : idx + window_size]
+            window_delay2_norm = delay2_norm[idx : idx + window_size]
+            window_loss2_norm = loss2_norm[idx : idx + window_size]
             idx += window_size
 
             # 构造4D序列 [d1, l1, d2, l2]
-            sequence = np.column_stack([window_delay1_norm, window_loss1_norm, window_delay2_norm, window_loss2_norm])
+            sequence = np.column_stack(
+                [
+                    window_delay1_norm,
+                    window_loss1_norm,
+                    window_delay2_norm,
+                    window_loss2_norm,
+                ]
+            )
             sequences.append(sequence)
 
             # 获取当前窗口对应的特征向量
@@ -231,47 +276,44 @@ class TrainingDataPreprocessor:
 
         # 6. 保存预处理结果
         # 获取归一化参数
-        normalization_method = normalizer.normalization_params['delay_up'].get('normalization_method', 'robust')
-        delay1_params = normalizer.normalization_params['delay_up']
-        delay2_params = normalizer.normalization_params['delay_down']
-        loss1_params = normalizer.normalization_params['loss_rate_up']
-        loss2_params = normalizer.normalization_params['loss_rate_down']
+        normalization_method = normalizer.normalization_params["delay_up"].get(
+            "normalization_method", "robust"
+        )
+        delay1_params = normalizer.normalization_params["delay_up"]
+        delay2_params = normalizer.normalization_params["delay_down"]
+        loss1_params = normalizer.normalization_params["loss_rate_up"]
+        loss2_params = normalizer.normalization_params["loss_rate_down"]
 
         preprocess_data = {
             "sequences": sequences,  # 4D序列 [batch, seq_len, 4]
             "conditions": conditions,  # 条件向量 [batch, cond_dim]
             "behavior_ids": behavior_ids,
-            "loss_rate_mapping_up": loss1_params['loss_rate_mapping'],
-            "loss_rate_mapping_down": loss2_params['loss_rate_mapping'],
+            "loss_rate_mapping_up": loss1_params["loss_rate_mapping"],
+            "loss_rate_mapping_down": loss2_params["loss_rate_mapping"],
             "valid_loss_values_up": valid_loss_values_up,
             "valid_loss_values_down": valid_loss_values_down,
             "sample_length": len(sequences),
             "num_behaviors": len(np.unique(behavior_ids)),
             "normalization_method": normalization_method,
             # 上行归一化参数
-            "delay1_scaler_center_": delay1_params['delay_scaler_center_'],
-            "delay1_scaler_scale_": delay1_params['delay_scaler_scale_'],
-            "delay1_robust_scale_min": delay1_params['robust_scale_min'],
-            "delay1_robust_scale_max": delay1_params['robust_scale_max'],
-            "delay1_clipped_min": delay1_params['clipped_min'],
-            "delay1_clipped_max": delay1_params['clipped_max'],
-            "delay1_use_log_transform": delay1_params.get('use_log_transform', True),
+            "delay1_scaler_center_": delay1_params["delay_scaler_center_"],
+            "delay1_scaler_scale_": delay1_params["delay_scaler_scale_"],
+            "delay1_robust_scale_min": delay1_params["robust_scale_min"],
+            "delay1_robust_scale_max": delay1_params["robust_scale_max"],
+            "delay1_clipped_min": delay1_params["clipped_min"],
+            "delay1_clipped_max": delay1_params["clipped_max"],
             # 下行归一化参数
-            "delay2_scaler_center_": delay2_params['delay_scaler_center_'],
-            "delay2_scaler_scale_": delay2_params['delay_scaler_scale_'],
-            "delay2_robust_scale_min": delay2_params['robust_scale_min'],
-            "delay2_robust_scale_max": delay2_params['robust_scale_max'],
-            "delay2_clipped_min": delay2_params['clipped_min'],
-            "delay2_clipped_max": delay2_params['clipped_max'],
-            "delay2_use_log_transform": delay2_params.get('use_log_transform', True),
+            "delay2_scaler_center_": delay2_params["delay_scaler_center_"],
+            "delay2_scaler_scale_": delay2_params["delay_scaler_scale_"],
+            "delay2_robust_scale_min": delay2_params["robust_scale_min"],
+            "delay2_robust_scale_max": delay2_params["robust_scale_max"],
+            "delay2_clipped_min": delay2_params["clipped_min"],
+            "delay2_clipped_max": delay2_params["clipped_max"],
         }
 
         # 保存为npz文件
         npz_file = output_preprocess_dir / "preprocess_data.npz"
-        np.savez(
-            npz_file,
-            **preprocess_data
-        )
+        np.savez(npz_file, **preprocess_data)
 
         logger.info("预处理完成！")
         logger.info(f"序列形状: {sequences.shape}")

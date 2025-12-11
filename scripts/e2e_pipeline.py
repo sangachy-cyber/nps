@@ -15,13 +15,13 @@ sys.path.append(os.path.abspath("src"))
 # 导入日志模块
 from network_simulation.utils.logger import get_logger
 
-# 导入各个脚本的核心函数
-from step1_1_process_raw import process_raw_data as process_raw_data_func
-from step1_2_extract_features import extract_features as extract_features_func
-from step1_3_discover_patterns import discover_patterns as discover_patterns_func
-from step1_4_evaluate_patterns import evaluate_patterns as evaluate_patterns_func
+# 导入必要的管道类
+from network_simulation.pipeline.behavior_discovery_pipeline import (
+    BehaviorDiscoveryPipeline,
+)
+from network_simulation.pipeline.diffusion_model_pipeline import DiffusionModelPipeline
 
-# step2需要的函数将在需要时动态导入
+# step2需要的函数将通过DiffusionModelPipeline调用
 
 # 初始化日志记录器
 logger = get_logger(__name__)
@@ -57,13 +57,21 @@ def main():
 
     参数说明：
         input_raw_file_or_dir: 原始网络数据文件或目录路径
+        --steps: 指定要运行的步骤，例如 "1.1,1.2,2.0,2.1"，默认运行所有步骤
         --behavior-only: 只执行行为识别部分，跳过训练扩散模型和生成样本步骤
+        --train-only: 只执行训练和生成部分，跳过行为识别步骤
     """
     # 解析命令行参数
     import argparse
 
     parser = argparse.ArgumentParser(description="端到端网络行为模式发现与生成管道")
     parser.add_argument("input_path", help="原始网络数据文件或目录路径")
+    parser.add_argument(
+        "--steps",
+        type=str,
+        default=None,
+        help="指定要运行的步骤，例如 '1.1,1.2,2.0,2.1'，默认运行所有步骤",
+    )
     parser.add_argument(
         "--behavior-only",
         action="store_true",
@@ -77,6 +85,11 @@ def main():
 
     args = parser.parse_args()
     input_path = Path(args.input_path)
+
+    # 解析步骤参数
+    selected_steps = None
+    if args.steps:
+        selected_steps = set(args.steps.split(","))
 
     # 检查输入路径是否存在
     if not input_path.exists():
@@ -110,12 +123,17 @@ def main():
     logger.info("端到端网络行为模式发现与生成管道")
     logger.info(f"输入路径: {input_path}")
     logger.info(f"输出目录: {base_output_dir}")
-    logger.info(f"参数: behavior-only={args.behavior_only}, train-only={args.train_only}")
+    logger.info(
+        f"参数: behavior-only={args.behavior_only}, train-only={args.train_only}"
+    )
     logger.info("=" * 70)
 
-    # 初始化必要的变量
+    # 初始化行为发现流程和扩散模型流程
+    behavior_pipeline = BehaviorDiscoveryPipeline()
+    diffusion_pipeline = DiffusionModelPipeline()
+
+    # 处理后的合并文件路径
     merged_processed_file = None
-    merged_features_file = None
 
     # 根据train-only参数决定是否执行行为识别步骤
     if not args.train_only:
@@ -132,193 +150,121 @@ def main():
         evaluation_dir.mkdir(parents=True, exist_ok=True)
 
         # 步骤1.1: 处理原始数据
-        logger.info("\n步骤1.1: 处理原始数据")
-        if input_path.is_file():
-            process_raw_data_func(input_path, processed_dir)
-        elif input_path.is_dir():
-            raw_files = list(input_path.glob("*.txt"))
-            if not raw_files:
-                logger.error(f"警告: 在 {input_path} 中未找到 .txt 文件")
-                sys.exit(1)
-            for raw_file in raw_files:
-                process_raw_data_func(raw_file, processed_dir)
-        logger.info("步骤1.1: 处理原始数据完成")
+        if selected_steps is None or "1.1" in selected_steps:
+            logger.info("\n步骤1.1: 处理原始数据")
+            from network_simulation.data_processing.data_processor import DataProcessor
+
+            data_processor = DataProcessor()
+            data_processor.process_raw_data(input_path, processed_dir)
+            logger.info("步骤1.1: 处理原始数据完成")
+
+        # 获取合并后的处理数据文件路径
+        processed_files = list(processed_dir.glob("*.csv"))
+        if processed_files:
+            # 如果只有一个处理文件，直接使用；否则合并
+            if len(processed_files) == 1:
+                merged_processed_file = processed_files[0]
+            else:
+                # 合并所有处理后的文件
+                import pandas as pd
+
+                all_processed_df = []
+                for processed_file in processed_files:
+                    df = pd.read_csv(processed_file, parse_dates=["timestamp"])
+                    all_processed_df.append(df)
+                merged_processed_df = pd.concat(all_processed_df, ignore_index=True)
+                merged_processed_file = processed_dir / "merged_processed_data.csv"
+                merged_processed_df.to_csv(merged_processed_file, index=False)
 
         # 步骤1.2: 提取特征
-        logger.info("\n步骤1.2: 提取特征")
-        # 合并所有处理后的文件
-        processed_files = list(processed_dir.glob("*.csv"))
-        if not processed_files:
-            logger.error(f"在 {processed_dir} 中未找到 .csv 文件")
-            sys.exit(1)
-
-        # 如果processed_dir中只有一个文件，直接处理它
-        if len(processed_files) == 1:
-            extract_features_func(processed_files[0], features_dir)
-        else:
-            # 如果有多个文件，我们需要先合并它们，然后处理合并后的文件
-            import pandas as pd
-
-            all_processed_df = []
-            for processed_file in processed_files:
-                df = pd.read_csv(processed_file, parse_dates=["timestamp"])
-                # 添加文件来源列
-                df["file_source"] = processed_file.stem
-                all_processed_df.append(df)
-
-            # 合并为一个DataFrame
-            merged_processed_df = pd.concat(all_processed_df, ignore_index=True)
-            logger.info(
-                f"合并了 {len(processed_files)} 个处理后的文件，总样本数: {len(merged_processed_df)}"
-            )
-
-            # 保存合并后的文件
-            merged_processed_file = processed_dir / "merged_processed_data.csv"
-            merged_processed_df.to_csv(merged_processed_file, index=False)
-
-            # 对合并后的文件提取特征
-            logger.info("\n正在对合并后的文件提取特征...")
-            extract_features_func(merged_processed_file, features_dir)
-
-            # 保留文件，后面步骤1.3还需要使用
-        logger.info("步骤1.2: 提取特征完成")
+        if selected_steps is None or "1.2" in selected_steps:
+            logger.info("\n步骤1.2: 提取特征")
+            behavior_pipeline.run_step1_2(processed_dir, features_dir)
+            logger.info("步骤1.2: 提取特征完成")
 
         # 步骤1.3: 发现行为模式
-        logger.info("\n步骤1.3: 发现行为模式")
-        # 查找合并后的特征文件
-        merged_features_file = features_dir / "merged_features.csv"
-        if not merged_features_file.exists():
-            # 如果没有合并后的特征文件，使用第一个特征文件
-            merged_features_file = next(features_dir.glob("*.csv"))
-        # 合并所有处理后的文件用于发现模式
-        processed_files = list(processed_dir.glob("*.csv"))
-        import pandas as pd
-        all_processed_df = []
-        for processed_file in processed_files:
-            df = pd.read_csv(processed_file, parse_dates=["timestamp"])
-            # 添加文件来源列
-            df["file_source"] = processed_file.stem
-            all_processed_df.append(df)
-
-        merged_processed_df = pd.concat(all_processed_df, ignore_index=True)
-        # 保存合并后的处理数据
-        merged_processed_file = processed_dir / "merged_processed_data.csv"
-        merged_processed_df.to_csv(merged_processed_file, index=False)
-        discover_patterns_func(merged_features_file, merged_processed_file, patterns_dir)
-        logger.info("步骤1.3: 发现行为模式完成")
+        if selected_steps is None or "1.3" in selected_steps:
+            logger.info("\n步骤1.3: 发现行为模式")
+            behavior_pipeline.run_step1_3(features_dir, processed_dir, patterns_dir)
+            logger.info("步骤1.3: 发现行为模式完成")
 
         # 步骤1.4: 评估行为发现效果
-        logger.info("\n步骤1.4: 评估行为发现效果")
-        # 创建评估结果目录
-        pattern_eval_dir = base_output_dir / "pattern_evaluation"
-        pattern_eval_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            evaluate_patterns_func(merged_features_file, patterns_dir, pattern_eval_dir)
-            logger.info("步骤1.4: 评估行为发现效果完成")
-        except Exception as e:
-            logger.warning(f"步骤1.4: 评估行为发现效果失败，将跳过此步骤。错误信息: {str(e)}")
+        if selected_steps is None or "1.4" in selected_steps:
+            logger.info("\n步骤1.4: 评估行为发现效果")
+            # 创建评估结果目录
+            pattern_eval_dir = base_output_dir / "pattern_evaluation"
+            pattern_eval_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                behavior_pipeline.run_step1_4(
+                    features_dir, patterns_dir, pattern_eval_dir
+                )
+                logger.info("步骤1.4: 评估行为发现效果完成")
+            except Exception as e:
+                logger.warning(
+                    f"步骤1.4: 评估行为发现效果失败，将跳过此步骤。错误信息: {str(e)}"
+                )
     else:
-        # 只执行训练时，直接获取现有的文件
-        logger.info("\n跳过行为识别步骤，直接执行训练和生成")
-
-        # 检查必要的文件是否存在
-        required_files = []
-
-        # 检查处理文件
+        # 只执行训练时，检查必要的目录是否存在
+        if not processed_dir.exists() or not patterns_dir.exists():
+            logger.error(
+                "train-only模式需要processed_dir和patterns_dir目录存在，请先运行行为识别步骤"
+            )
+            sys.exit(1)
+        # 获取合并后的处理数据文件路径
         processed_files = list(processed_dir.glob("*.csv"))
-        if not processed_files:
-            required_files.append(f"{processed_dir}/*.csv")
-        else:
-            merged_processed_file = processed_dir / "merged_processed_data.csv"
-            if not merged_processed_file.exists():
-                # 如果没有合并文件，使用第一个文件
+        if processed_files:
+            if len(processed_files) == 1:
                 merged_processed_file = processed_files[0]
-            logger.info(f"使用现有的处理文件: {merged_processed_file}")
-
-        # 检查特征文件
-        features_files = list(features_dir.glob("*.csv"))
-        if not features_files:
-            required_files.append(f"{features_dir}/*.csv")
+            else:
+                merged_processed_file = processed_dir / "merged_processed_data.csv"
         else:
-            merged_features_file = features_files[0]
-            logger.info(f"使用现有的特征文件: {merged_features_file}")
-
-        # 检查行为模式文件
-        window_features_file = patterns_dir / "window_features_rule.npy"
-        if not window_features_file.exists():
-            required_files.append(f"{window_features_file}")
-
-        # 如果缺少必要文件，报错并退出
-        if required_files:
-            logger.error("train-only模式下缺少必要的文件，这些文件需要先通过完整流程生成:")
-            for file in required_files:
-                logger.error(f"  - {file}")
-            logger.error("请先运行完整流程: python scripts/e2e_pipeline.py data/raw")
+            logger.error("在processed_dir目录中未找到处理后的数据文件")
             sys.exit(1)
 
     # 如果不是只执行行为识别，则执行步骤2（训练扩散模型和生成样本）
     if not args.behavior_only:
-        # 动态导入step2需要的函数
-        from step2_0_preprocess_data import preprocess_data as preprocess_data_func
-        from step2_1_train_model import train_model as train_model_func
-        from step2_2_generate_samples import generate_samples as generate_samples_func
-        from network_simulation.visualization.results_visualizer import ResultsVisualizer
-        from step2_4_evaluate_generation import main as evaluate_generation_main
+        # 确保merged_processed_file存在
+        if not merged_processed_file or not merged_processed_file.exists():
+            logger.error("执行step2需要处理后的数据文件，请确保step1.1已正确执行")
+            sys.exit(1)
 
         # 步骤2.0: 预处理数据
-        logger.info("\n步骤2.0: 预处理训练数据")
-        preprocess_data_func(patterns_dir, merged_processed_file, preprocess_dir)
-        logger.info("步骤2.0: 预处理训练数据完成")
+        if selected_steps is None or "2.0" in selected_steps:
+            logger.info("\n步骤2.0: 预处理训练数据")
+            diffusion_pipeline.run_step2_0(
+                patterns_dir, merged_processed_file, preprocess_dir
+            )
+            logger.info("步骤2.0: 预处理训练数据完成")
 
         # 步骤2.1: 训练条件扩散模型
-        logger.info("\n步骤2.1: 训练条件扩散模型")
-        train_model_func(preprocess_dir, train_dir)
-        logger.info("步骤2.1: 训练条件扩散模型完成")
+        if selected_steps is None or "2.1" in selected_steps:
+            logger.info("\n步骤2.1: 训练条件扩散模型")
+            diffusion_pipeline.run_step2_1(preprocess_dir, train_dir)
+            logger.info("步骤2.1: 训练条件扩散模型完成")
 
         # 步骤2.2: 生成样本
-        logger.info("\n步骤2.2: 生成网络状态样本")
-        model_path = train_dir / "diffusion_model_final.pth"
-        generate_samples_func(
-            merged_processed_file, patterns_dir, model_path, generation_dir
-        )
-        logger.info("步骤2.2: 生成网络状态样本完成")
+        if selected_steps is None or "2.2" in selected_steps:
+            logger.info("\n步骤2.2: 生成网络状态样本")
+            diffusion_pipeline.run_step2_2(
+                patterns_dir,
+                merged_processed_file,
+                train_dir,
+                generation_dir,
+                preprocess_dir,
+            )
+            logger.info("步骤2.2: 生成网络状态样本完成")
 
         # 步骤2.3: 可视化结果对比
-        logger.info("\n步骤2.3: 可视化结果对比")
-        # 查找生成的样本文件
-        original_files = list(generation_dir.glob("original_sample_*.csv"))
-        generated_files = list(generation_dir.glob("generated_sample_*.csv"))
-        if original_files and generated_files:
-            # 排序文件，确保一一对应
-            original_files.sort()
-            generated_files.sort()
-            for i, (original_file, generated_file) in enumerate(zip(original_files, generated_files)):
-                # 为每组样本创建独立的输出目录
-                group_info = original_file.stem.split("_")[3:]
-                group_dir_name = "_" + "_".join(group_info) if group_info else ""
-                group_output_dir = visualization_dir / f"group{group_dir_name}"
-                group_output_dir.mkdir(parents=True, exist_ok=True)
-                # 第一张图片作为主要可视化，生成综合报告所需的图片
-                is_main_visualization = (i == 0)
-                # 创建ResultsVisualizer实例并调用visualize_results方法
-                visualizer = ResultsVisualizer(group_output_dir)
-                visualizer.visualize_results(original_file, generated_file, is_main_visualization)
-        logger.info("步骤2.3: 可视化结果对比完成")
+        if selected_steps is None or "2.3" in selected_steps:
+            logger.info("\n步骤2.3: 可视化结果对比")
+            diffusion_pipeline.run_step2_3(generation_dir, visualization_dir)
+            logger.info("步骤2.3: 可视化结果对比完成")
 
         # 步骤2.4: 评估生成样本质量
-        logger.info("\n步骤2.4: 评估生成样本质量")
-        # 使用evaluate_generation.py的main函数，它会处理所有样本
-        # 保存原始sys.argv，然后修改它以调用evaluate_generation_main
-        original_argv = sys.argv.copy()
-        sys.argv = [
-            "step2_4_evaluate_generation.py",
-            str(generation_dir),
-            str(evaluation_dir),
-        ]
-        evaluate_generation_main()
-        # 恢复原始sys.argv
-        sys.argv = original_argv
-        logger.info("步骤2.4: 评估生成样本质量完成")
+        if selected_steps is None or "2.4" in selected_steps:
+            logger.info("\n步骤2.4: 评估生成样本质量")
+            diffusion_pipeline.run_step2_4(generation_dir, train_dir, evaluation_dir)
+            logger.info("步骤2.4: 评估生成样本质量完成")
     else:
         logger.info("\n已跳过步骤2（训练扩散模型和生成样本），只执行了行为识别部分")
 

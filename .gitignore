@@ -94,6 +94,7 @@ _docs/
 .jekyll-cache/
 
 # 忽略其他项目特定文件
+output/
 
 # 忽略Trae文档目录
 .trae/documents/

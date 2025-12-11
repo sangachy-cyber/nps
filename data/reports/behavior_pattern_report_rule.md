@@ -7,14 +7,14 @@
 ### 上行行为转移指标
 | 指标名称 | 数值 | 说明 |
 |----------|------|------|
-| 平均转移熵 | 0.8000 | 衡量状态转移不确定性，越低越确定 |
-| 转移稀疏性 | 0.9000 | 非零转移概率占比，反映行为切换复杂度 |
+| 平均转移熵 | 0.5502 | 衡量状态转移不确定性，越低越确定 |
+| 转移稀疏性 | 0.1562 | 非零转移概率占比，反映行为切换复杂度 |
 
 ### 下行行为转移指标
 | 指标名称 | 数值 | 说明 |
 |----------|------|------|
-| 平均转移熵 | 0.0000 | 衡量状态转移不确定性，越低越确定 |
-| 转移稀疏性 | 0.0000 | 非零转移概率占比，反映行为切换复杂度 |
+| 平均转移熵 | 0.4190 | 衡量状态转移不确定性，越低越确定 |
+| 转移稀疏性 | 0.1406 | 非零转移概率占比，反映行为切换复杂度 |
 
 ## 2. 特征降维可视化
 
@@ -59,15 +59,21 @@
 
 ### 5.1 上行行为特征均值
 
-| 行为类别 | feat_delay_std | feat_loss_burst_ratio | feat_burst_duration | feat_burst_intensity | feat_delay_trend | feat_delay_acf_5 |
-|----------|--- | --- | --- | --- | --- | ---|
-
+| 行为类别 | feat_delay1_std | feat_delay1_mean | feat_loss1_std | feat_loss2_nonzero_ratio | feat_loss2_high_ratio | feat_loss2_mean | feat_loss2_std | feat_max_consec_loss2 | feat_max_congestion_run2 | feat_delay1_trend | feat_delay1_acf_5 | feat_loss2_mode_encoded | feat_delay_ratio |
+|----------|--- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---|
+| 稳定 | 0.2146 | 4.3642 | 0.1262 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | -0.0013 | 0.1114 | 0.0000 | 1.0028 |
+| 强突发 | 0.3190 | 6.4506 | 0.3662 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0038 | 0.4442 | 0.0000 | 1.0034 |
+| 瞬时峰值 | 0.2086 | 3.2497 | 0.0995 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0008 | 0.0722 | 0.0000 | 0.9873 |
+| 高丢包低延迟 | 1.1994 | 4.8308 | 0.3243 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | -0.0065 | 0.7549 | 0.0000 | 0.9990 |
 
 ### 5.2 下行行为特征均值
 
-| 行为类别 | feat_delay_std | feat_loss_burst_ratio | feat_burst_duration | feat_burst_intensity | feat_delay_trend | feat_delay_acf_5 |
-|----------|--- | --- | --- | --- | --- | ---|
-
+| 行为类别 | feat_delay1_std | feat_delay1_mean | feat_loss1_std | feat_loss2_nonzero_ratio | feat_loss2_high_ratio | feat_loss2_mean | feat_loss2_std | feat_max_consec_loss2 | feat_max_congestion_run2 | feat_delay1_trend | feat_delay1_acf_5 | feat_loss2_mode_encoded | feat_delay_ratio |
+|----------|--- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---|
+| 稳定 | 0.1938 | 5.5722 | 0.2728 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | -0.0018 | 0.2517 | 0.0000 | 0.9998 |
+| 弱突发 | 1.2831 | 5.0470 | 0.4046 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0340 | 0.7878 | 0.0000 | 1.0077 |
+| 瞬时峰值 | 1.0182 | 5.2350 | 0.3072 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | -0.0281 | 0.7656 | 0.0000 | 0.9985 |
+| 高延迟无丢包 | 0.0408 | 6.7209 | 0.2845 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0007 | 0.4534 | 0.0000 | 1.0014 |
 
 ## 6. 标签时间轴图
 
@@ -441,6 +447,8 @@
 
 ![时间轴图](plots/timelines/down_20251208_224754_nXj-playback.txt_timeline_window_1.png)
 
+![时间轴图](plots/timelines/down_20251208_224754_nXj-playback_processed.csv_timeline_window_1.png)
+
 ![时间轴图](plots/timelines/up_20251203_230356_b6x-playback.txt_timeline_window_1.png)
 
 ![时间轴图](plots/timelines/up_20251203_230356_b6x-playback.txt_timeline_window_2.png)
@@ -623,10 +631,23 @@
 
 ![时间轴图](plots/timelines/up_20251208_224754_nXj-playback.txt_timeline_window_1.png)
 
+![时间轴图](plots/timelines/up_20251208_224754_nXj-playback_processed.csv_timeline_window_1.png)
+
 ## 7. 原始数据样本可视化
 
 以下是每个行为类别的典型样本对应的原始时延和丢包率可视化：
 
 ![典型样本](plots/behavior_samples/typical_samples.png)
 
+## 8. 不同文件行为类别占比统计
+
+| 文件名 | 稳定 (%) | 强突发 (%) | 瞬时峰值 (%) | 高丢包低延迟 (%)|
+|----------|--- |--- |--- |--- |
+| unknown | 15.0 | 60.0 | 10.0 | 15.0|
+
+### 8.1 文件总窗口数
+
+| 文件名 | 总窗口数 |
+|----------|----------|
+| unknown | 20 |
 

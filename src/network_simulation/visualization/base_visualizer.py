@@ -18,9 +18,23 @@ logger = get_logger(__name__)
 
 
 class BaseVisualizer:
-    """基础可视化类，提供通用可视化功能"""
+    """基础可视化类，提供通用可视化功能
+
+    该类为所有可视化类提供基础功能，包括图表保存、散点图创建、演化箭头添加
+    和图表转换为base64编码等通用功能。
+    """
 
     def __init__(self, output_dir: Path):
+        """初始化基础可视化类
+
+        Args:
+            output_dir (Path): 可视化结果的输出目录路径
+
+        Examples:
+            >>> from network_simulation.visualization.base_visualizer import BaseVisualizer
+            >>> from pathlib import Path
+            >>> base_visualizer = BaseVisualizer(Path("output/visualizations"))
+        """
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -34,7 +48,20 @@ class BaseVisualizer:
         plt.rcParams["axes.unicode_minus"] = False
 
     def _save_plot(self, output_path: Path, dpi: int = 150) -> None:
-        """保存图表到指定路径"""
+        """保存图表到指定路径
+
+        Args:
+            output_path (Path): 图表的保存路径
+            dpi (int, optional): 图表的DPI，默认为150
+
+        Examples:
+            >>> from network_simulation.visualization.base_visualizer import BaseVisualizer
+            >>> from pathlib import Path
+            >>> import matplotlib.pyplot as plt
+            >>> base_visualizer = BaseVisualizer(Path("output/visualizations"))
+            >>> plt.plot([1, 2, 3], [4, 5, 6])
+            >>> base_visualizer._save_plot(Path("output/visualizations/test_plot.png"))
+        """
         plt.savefig(output_path, format="png", dpi=dpi, bbox_inches="tight")
         plt.close()
         logger.debug(f"保存图表：{output_path}")
@@ -47,9 +74,32 @@ class BaseVisualizer:
         xlabel: str,
         ylabel: str,
         show_evolution: bool = True,
-        method: str = None
+        method: str = None,
     ) -> None:
-        """创建通用散点图"""
+        """创建通用散点图
+
+        创建包含类别标注和典型样本标记的散点图，支持添加演化方向箭头。
+
+        Args:
+            X_transformed (np.ndarray): 降维后的特征矩阵，shape (n_samples, 2)
+            labels (np.ndarray): 行为标签数组，shape (n_samples,)
+            title (str): 图表标题
+            xlabel (str): X轴标签
+            ylabel (str): Y轴标签
+            show_evolution (bool, optional): 是否显示演化方向箭头，默认为True
+            method (str, optional): 可视化方法名称，用于确定是否显示演化箭头，默认为None
+
+        Examples:
+            >>> from network_simulation.visualization.base_visualizer import BaseVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> base_visualizer = BaseVisualizer(Path("output/visualizations"))
+            >>> X_transformed = np.random.randn(100, 2)
+            >>> labels = np.random.randint(0, 3, 100)
+            >>> base_visualizer._create_scatter_plot(
+            ...     X_transformed, labels, "测试散点图", "X轴", "Y轴", method="rule"
+            ... )
+        """
         plt.figure(figsize=(10, 8))
         unique_labels = np.unique(labels)
         category_centers = {}
@@ -80,7 +130,7 @@ class BaseVisualizer:
                 bbox=dict(boxstyle="round,pad=0.5", fc=color, alpha=0.7),
                 arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
                 fontsize=9,
-                ha="left"
+                ha="left",
             )
 
         # 添加演化方向箭头 - 仅在规则方法下显示
@@ -95,7 +145,21 @@ class BaseVisualizer:
         plt.tight_layout()
 
     def _add_evolution_arrows(self, category_centers: Dict[int, np.ndarray]) -> None:
-        """添加演化方向箭头"""
+        """添加演化方向箭头
+
+        在散点图中添加不同行为模式之间的演化方向箭头，显示行为模式的发展关系。
+
+        Args:
+            category_centers (Dict[int, np.ndarray]): 类别中心点字典，键为类别标签，值为中心点坐标
+
+        Examples:
+            >>> from network_simulation.visualization.base_visualizer import BaseVisualizer
+            >>> from pathlib import Path
+            >>> import numpy as np
+            >>> base_visualizer = BaseVisualizer(Path("output/visualizations"))
+            >>> category_centers = {0: np.array([0, 0]), 1: np.array([1, 1]), 2: np.array([2, 2])}
+            >>> base_visualizer._add_evolution_arrows(category_centers)
+        """
         # 按类别ID排序，假设ID越小代表越稳定
         sorted_labels = sorted(category_centers.keys())
 
@@ -117,8 +181,8 @@ class BaseVisualizer:
                     color="darkred",
                     linewidth=2,
                     alpha=0.7,
-                    zorder=5
-                )
+                    zorder=5,
+                ),
             )
 
             # 添加演化方向标签
@@ -142,12 +206,30 @@ class BaseVisualizer:
                     alpha=0.8,
                     edgecolor="darkred",
                     linewidth=1,
-                    zorder=6
-                )
+                    zorder=6,
+                ),
             )
 
     def _plot_to_base64(self, dpi: int = 150) -> str:
-        """将当前图表转换为base64编码"""
+        """将当前图表转换为base64编码
+
+        将当前Matplotlib图表转换为base64编码的PNG图像，用于嵌入HTML报告。
+
+        Args:
+            dpi (int, optional): 图表的DPI，默认为150
+
+        Returns:
+            str: base64编码的PNG图像字符串
+
+        Examples:
+            >>> from network_simulation.visualization.base_visualizer import BaseVisualizer
+            >>> from pathlib import Path
+            >>> import matplotlib.pyplot as plt
+            >>> base_visualizer = BaseVisualizer(Path("output/visualizations"))
+            >>> plt.plot([1, 2, 3], [4, 5, 6])
+            >>> img_base64 = base_visualizer._plot_to_base64()
+            >>> print(f"Base64图像数据长度：{len(img_base64)}")
+        """
         buffer = BytesIO()
         plt.savefig(buffer, format="png", dpi=dpi, bbox_inches="tight")
         buffer.seek(0)
