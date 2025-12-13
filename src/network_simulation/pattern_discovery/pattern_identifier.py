@@ -1596,7 +1596,7 @@ class PatternIdentifier:
         # 准备新的DataFrame，包含未归一化特征值、行为ID和原始数据统计
         features_df = pd.read_csv(input_features_path)
         raw_data_df = pd.read_csv(input_processed_path, parse_dates=["timestamp"])
-        
+
         # 获取特征列和原始数据列
         feature_columns = [
             col for col in features_df.columns if col.startswith("feat_")
@@ -1611,6 +1611,8 @@ class PatternIdentifier:
         # 创建新的DataFrame，包含所有特征列
         new_df = features_df.copy()
         new_df["behavior_id"] = patterns["unified_labels"]
+        new_df["behavior_id_up"] = patterns["labels_up"]
+        new_df["behavior_id_down"] = patterns["labels_down"]
         new_df["original_filename"] = original_filename
 
         # 添加原始时延等数据的统计信息
