@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from ..utils.logger import get_logger
+from config import BEHAVIOR_LABELS
 
 logger = get_logger(__name__)
 
@@ -22,20 +23,8 @@ class PatternIdentifier:
     能够识别多种网络行为模式，包括稳定、弱突发、强突发、瞬时峰值等。
     """
 
-    # 行为标签常量定义
-    BEHAVIOR_LABELS: Dict[str, int] = {
-        "STABLE": 0,
-        "WEAK_BURST": 1,
-        "STRONG_BURST": 2,
-        "INSTANT_SPIKE": 3,
-        "HIGH_DELAY_NO_LOSS": 4,
-        "HIGH_LOSS_STEADY": 5,
-        "FREQUENT_FLUCTUATION": 6,
-        "LOW_DELAY_HIGH_LOSS": 7,
-        "INVALID": -1,  # 无效窗口标签
-    }
-
     # 行为标签反向映射，便于外部解读数字标签
+    # 使用配置中的BEHAVIOR_LABELS，确保与配置保持一致
     LABEL_TO_NAME = {v: k for k, v in BEHAVIOR_LABELS.items()}
 
     def __init__(self, method: str = "rule", config: Dict = None):
@@ -158,21 +147,16 @@ class PatternIdentifier:
 
         logger.debug(f"PatternIdentifier 初始化完成，使用配置: {self.config}")
 
-    def identify(
-        self, features_df: pd.DataFrame, raw_data_df: pd.DataFrame = None
-    ) -> Dict:
+    def identify(self, features_df: pd.DataFrame, raw_data_df: pd.DataFrame) -> Dict:
         """使用规则事件检测引擎识别网络行为模式
 
         注意：
-        1. 当提供 raw_data_df 时，可以检测所有行为模式，包括 INSTANT_SPIKE
-        2. 当未提供 raw_data_df 时，以下行为模式无法检测：
-           - INSTANT_SPIKE (瞬时峰值)
-           - HIGH_DELAY_NO_LOSS (高延迟无丢包)
-           - 某些依赖绝对尺度的行为模式
+        1. 该方法必须提供raw_data_df，以确保所有行为模式都能被正确检测
+        2. 支持检测所有8种网络行为模式
 
         Args:
-            features_df (pd.DataFrame): 包含特征数据的DataFrame
-            raw_data_df (pd.DataFrame, optional): 原始数据DataFrame，可选
+            features_df (pd.DataFrame): 包含特征数据的DataFrame，必须包含window_start和window_end列
+            raw_data_df (pd.DataFrame): 原始数据DataFrame，用于检测所有行为模式
 
         Returns:
             Dict: 包含识别结果的字典，包括标签、转移矩阵和各种指标
@@ -199,12 +183,20 @@ class PatternIdentifier:
             ... }
             >>> pattern_identifier = PatternIdentifier(config=config)
             >>> features_df = pd.DataFrame({
-            ...     'feat_delay1_mean': np.random.normal(50, 10, 100),
-            ...     'feat_loss1_mean': np.random.choice([0, 0.01, 0.05], 100),
-            ...     'feat_delay2_mean': np.random.normal(60, 15, 100),
-            ...     'feat_loss2_mean': np.random.choice([0, 0.01, 0.05], 100)
+            ...     'window_start': [0, 50, 100],
+            ...     'window_end': [50, 100, 150],
+            ...     'feat_delay1_mean': np.random.normal(50, 10, 3),
+            ...     'feat_loss1_mean': np.random.choice([0, 0.01, 0.05], 3),
+            ...     'feat_delay2_mean': np.random.normal(60, 15, 3),
+            ...     'feat_loss2_mean': np.random.choice([0, 0.01, 0.05], 3)
             ... })
-            >>> results = pattern_identifier.identify(features_df)
+            >>> raw_data_df = pd.DataFrame({
+            ...     'delay1': np.random.normal(50, 10, 150),
+            ...     'loss_rate1': np.random.choice([0, 0.01, 0.05], 150),
+            ...     'delay2': np.random.normal(60, 15, 150),
+            ...     'loss_rate2': np.random.choice([0, 0.01, 0.05], 150)
+            ... })
+            >>> results = pattern_identifier.identify(features_df, raw_data_df)
             >>> print(f"上行标签数量: {len(results['labels_up'])}")
             >>> print(f"下行标签数量: {len(results['labels_down'])}")
         """
@@ -212,21 +204,21 @@ class PatternIdentifier:
         if features_df.empty:
             raise ValueError("输入特征DataFrame为空")
 
-        # 检查必要列
-        if raw_data_df is not None:
-            required_cols = ["window_start", "window_end"]
-            missing_cols = [
-                col for col in required_cols if col not in features_df.columns
-            ]
-            if missing_cols:
-                raise ValueError(
-                    f"raw_data_df提供时，features_df必须包含以下列: {required_cols}。缺少: {missing_cols}"
-                )
+        if raw_data_df is None:
+            raise ValueError("raw_data_df必须提供，以确保所有行为模式都能被正确检测")
 
-            # 检查raw_data_df的索引是否为连续整数
-            if not all(raw_data_df.index == range(len(raw_data_df))):
-                logger.warning("raw_data_df的索引不是连续整数，将重置索引")
-                raw_data_df = raw_data_df.reset_index(drop=True)
+        # 检查必要列
+        required_cols = ["window_start", "window_end"]
+        missing_cols = [col for col in required_cols if col not in features_df.columns]
+        if missing_cols:
+            raise ValueError(
+                f"features_df必须包含以下列: {required_cols}。缺少: {missing_cols}"
+            )
+
+        # 检查raw_data_df的索引是否为连续整数
+        if not all(raw_data_df.index == range(len(raw_data_df))):
+            logger.warning("raw_data_df的索引不是连续整数，将重置索引")
+            raw_data_df = raw_data_df.reset_index(drop=True)
 
         # 动态获取特征列
         self.feature_columns = [
@@ -266,31 +258,52 @@ class PatternIdentifier:
         separation_metrics_down = self._calculate_separation_metrics(X, labels_down)
         behavior_stats_down = self._calculate_behavior_statistics(X, labels_down)
 
+        # 生成统一行为标签，取上下行中最严重的行为标签（数字越大越严重）
+        unified_labels = np.maximum(labels_up, labels_down)
+
+        # 计算统一标签的转移矩阵和指标
+        transition_matrix_unified = self._calculate_transition_matrix(unified_labels)
+        transition_metrics_unified = self._calculate_transition_metrics(
+            transition_matrix_unified
+        )
+        separation_metrics_unified = self._calculate_separation_metrics(
+            X, unified_labels
+        )
+        behavior_stats_unified = self._calculate_behavior_statistics(X, unified_labels)
+
+        # 统一行为标签统计
+        unique_labels_unified, counts_unified = np.unique(
+            unified_labels, return_counts=True
+        )
+        label_stats_unified = {
+            int(lbl): int(cnt)
+            for lbl, cnt in zip(unique_labels_unified, counts_unified)
+        }
+        logger.info(f"统一行为标签统计: {label_stats_unified}")
+
         # 准备结果
         results = {
             "method": self.method,
             "labels_up": labels_up.tolist(),
             "labels_down": labels_down.tolist(),
+            "unified_labels": unified_labels.tolist(),  # 添加统一行为标签
             "metrics_up": transition_metrics_up,
             "metrics_down": transition_metrics_down,
+            "metrics_unified": transition_metrics_unified,  # 添加统一行为指标
             "transition_matrix_up": transition_matrix_up.tolist(),
             "transition_matrix_down": transition_matrix_down.tolist(),
+            "transition_matrix_unified": transition_matrix_unified.tolist(),  # 添加统一转移矩阵
             "behavior_stats_up": behavior_stats_up,
             "behavior_stats_down": behavior_stats_down,
+            "behavior_stats_unified": behavior_stats_unified,  # 添加统一行为统计
             "separation_metrics_up": separation_metrics_up,
             "separation_metrics_down": separation_metrics_down,
+            "separation_metrics_unified": separation_metrics_unified,  # 添加统一分离度指标
             "features": X.tolist(),
             "feature_columns": self.feature_columns,
+            "raw_data": raw_data_df,
+            "window_info": features_df[["window_start", "window_end"]].copy(),
         }
-
-        # 如果提供了原始数据，则存储用于后续保存
-        if raw_data_df is not None:
-            results["raw_data"] = raw_data_df
-            # 存储必要的features_df列，用于save()方法保存labeled_windows
-            results["window_info"] = features_df[["window_start", "window_end"]].copy()
-        else:
-            results["raw_data"] = None
-            results["window_info"] = None
 
         return results
 
@@ -358,17 +371,40 @@ class PatternIdentifier:
             >>> print(f"是否为强突发: {is_strong_burst}")
             True
         """
-        # 检测条件：delay ≥ 400ms且loss ≥ 0.25，连续15个点以上
+        # 检测条件1：高延迟且高丢包的连续序列
         congested = (delays >= self.STRONG_BURST_DELAY_THRESHOLD) & (
             loss_rates >= self.STRONG_BURST_LOSS_THRESHOLD
         )
 
         # 使用公共函数计算连续True序列的最大长度
-        from network_simulation.utils.loss_utils import calculate_max_consecutive_true
+        from network_simulation.utils.utils import calculate_max_consecutive_true
 
         max_run = calculate_max_consecutive_true(congested)
 
-        return max_run >= self.STRONG_BURST_MIN_RUN
+        # 检测条件2：整体窗口的平均延迟和丢包率都较高
+        delay_mean = np.mean(delays) if len(delays) > 0 else 0
+        loss_mean = np.mean(loss_rates) if len(loss_rates) > 0 else 0
+
+        # 添加联合条件，确保强突发检测的准确性
+        overall_high = (
+            delay_mean
+            > self.STRONG_BURST_DELAY_THRESHOLD * 0.8  # 平均延迟接近高延迟阈值
+            and loss_mean
+            > self.STRONG_BURST_LOSS_THRESHOLD * 0.8  # 平均丢包率接近高丢包率阈值
+        )
+
+        # 检测条件3：窗口内有多个高延迟或高丢包的峰值
+        high_delay_count = np.sum(delays >= self.STRONG_BURST_DELAY_THRESHOLD * 1.2)
+        high_loss_count = np.sum(loss_rates >= self.STRONG_BURST_LOSS_THRESHOLD * 1.2)
+
+        multiple_peaks = high_delay_count >= 5 or high_loss_count >= 5
+
+        # 联合条件：必须同时满足连续高延迟高丢包，且整体较高，且有多个峰值
+        # 增强强突发的检测条件，使其更加严格，避免与弱突发混淆
+        if max_run >= self.STRONG_BURST_MIN_RUN and overall_high and multiple_peaks:
+            return True
+
+        return False
 
     def _detect_weak_burst(
         self,
@@ -418,56 +454,101 @@ class PatternIdentifier:
             >>> print(f"是否为弱突发: {is_weak_burst}")
         """
         # Stable行为条件：低延迟，低丢包，低波动
+        # 使用与主检测逻辑完全相同的条件，确保一致性
+        delay_mean = np.mean(delays) if len(delays) > 0 else 0
         stable = (
-            loss_mean <= thresholds["loss_mean_low"]
-            and delay_std < thresholds["delay_std_high"] / 2
-            and loss_std < thresholds["loss_std_high"] / 2
+            loss_mean <= thresholds["loss_mean_low"] * 1.3  # 适度严格的丢包率阈值
+            and delay_std < thresholds["delay_std_high"] / 2.0  # 适度严格的延迟波动要求
+            and loss_std < thresholds["loss_std_high"] / 2.0  # 适度严格的丢包率波动要求
+            and delay_mean
+            < thresholds["delay_mean_high"] * 0.85  # 适度严格的延迟均值要求
         )
 
         if stable:
             return False
 
-        # 收集所有满足的条件，采用多数条件满足原则（至少2个条件）
+        # 收集所有满足的条件
         conditions = []
 
-        # 条件1: 中等丢包率
-        conditions.append(
-            loss_mean >= thresholds["loss_mean_low"]
-            and loss_mean < thresholds["loss_mean_high"]
+        # 计算延迟均值，用于后续判断
+        delay_mean = np.mean(delays) if len(delays) > 0 else 0
+
+        # 排除条件：如果接近强突发的阈值，不应该被判定为弱突发
+        # 明确区分弱突发和强突发的边界
+        near_strong_burst = (
+            loss_mean > self.STRONG_BURST_LOSS_THRESHOLD * 0.6  # 丢包率接近强突发阈值
+            or delay_mean
+            > self.STRONG_BURST_DELAY_THRESHOLD * 0.6  # 延迟接近强突发阈值
         )
 
-        # 条件2: 延迟上升趋势 - 使用与无原始数据版本一致的逻辑
-        # 计算延迟趋势斜率，使用与FeatureExtractor相同的Theil-Sen估计，对log(1+delay)计算
-        delay_trend = 0.0
-        if len(delays) > 1:
-            from scipy.stats import theilslopes
+        # 条件1: 中等丢包率，且不接近强突发阈值
+        # 调整为更合理的丢包率范围
+        conditions.append(
+            loss_mean
+            >= thresholds["loss_mean_low"] * 1.0  # 适度提高下限，区分STABLE和WEAK_BURST
+            and loss_mean < thresholds["loss_mean_high"]
+            and not near_strong_burst  # 确保不是接近强突发的情况
+        )
 
-            x = np.arange(len(delays))
+        # 条件2: 延迟上升趋势 - 使用简单的斜率计算
+        delay_trend = 0.0
+        if len(delays) > 5:  # 至少需要6个点才能计算有效趋势
             try:
+                # 简化的延迟趋势计算：使用最后5个点和前5个点的平均延迟比较
+                # 或者使用线性回归的斜率
+                x = np.arange(len(delays))
                 # 确保延迟值非负，避免log1p计算错误
                 delays_non_negative = np.maximum(delays, 0)
-                # 使用log(1+delay)计算趋势，与FeatureExtractor保持一致
+                # 使用log(1+delay)计算趋势
                 delays_log1 = np.log1p(delays_non_negative)
-                delay_trend, _, _, _ = theilslopes(delays_log1, x)
+                # 使用简单的线性回归计算斜率
+                if len(delays_log1) > 1:
+                    slope = np.polyfit(x, delays_log1, 1)[0]
+                    delay_trend = slope
             except Exception as e:
-                logger.warning(f"计算延迟趋势时出错: {e}")
+                logger.debug(f"计算延迟趋势时出错: {e}")
         # 检测延迟上升趋势，斜率为正
-        conditions.append(delay_trend > 0.0)
+        conditions.append(delay_trend > 0.0)  # 降低斜率阈值，允许更轻微的上升趋势
 
-        # 条件3: 延迟波动大
-        conditions.append(delay_std > thresholds["delay_std_high"] / 2)
+        # 条件3: 延迟波动大，调整为适中的阈值
+        conditions.append(delay_std > thresholds["delay_std_high"] / 2.0)
 
-        # 条件4: 丢包率波动大
-        conditions.append(loss_std > thresholds["loss_std_high"] / 2)
+        # 条件4: 丢包率波动大，调整为适中的阈值
+        conditions.append(loss_std > thresholds["loss_std_high"] / 2.0)
 
         # 条件5: 丢包率非零比例高
         if "feat_loss_nonzero_ratio" in available_features:
-            conditions.append(
-                row["feat_loss_nonzero_ratio"] > self.WEAK_BURST_LOSS_NONZERO_RATIO
-            )
+            loss_nonzero_value = row["feat_loss_nonzero_ratio"]
+            # 检查特征是否可能已归一化（值不在0-1范围内）
+            if 0 <= loss_nonzero_value <= 1:
+                # 原始比例值，使用默认阈值
+                conditions.append(
+                    loss_nonzero_value > self.WEAK_BURST_LOSS_NONZERO_RATIO
+                )
+            else:
+                # 可能已归一化，跳过此条件，避免误判
+                # 归一化后的特征值不能直接与原始阈值比较
+                logger.debug(
+                    f"检测到归一化的feat_loss_nonzero_ratio值: {loss_nonzero_value}，跳过此条件判断"
+                )
 
-        # 多数条件满足原则：至少满足2个条件才判定为Weak Burst
-        return sum(conditions) >= self.WEAK_BURST_MIN_CONDITIONS
+        # 动态调整需要满足的条件数量
+        # 基于可用条件的数量动态调整，确保检测的灵活性和准确性
+        num_conditions = len(conditions)
+        if num_conditions == 0:
+            return False
+        elif num_conditions <= 2:
+            # 只有2个或更少条件时，需要满足所有条件
+            required_conditions = num_conditions
+        elif num_conditions == 3:
+            # 3个条件时，需要满足至少2个
+            required_conditions = 2
+        else:
+            # 4个或更多条件时，需要满足至少一半条件
+            required_conditions = max(2, num_conditions // 2)
+
+        # 条件满足原则：满足至少required_conditions个条件才判定为Weak Burst
+        return sum(conditions) >= required_conditions
 
     def _detect_instant_spike(self, delays: np.ndarray, loss_rates: np.ndarray) -> bool:
         """检测瞬时峰值行为
@@ -559,70 +640,90 @@ class PatternIdentifier:
 
         # 如果窗口无效，标记为INVALID
         if stats is None:
-            return self.BEHAVIOR_LABELS["INVALID"]
+            return BEHAVIOR_LABELS["INVALID"]
 
         delay_mean, delay_std, loss_mean, loss_std = stats
 
-        # 按严重性优先级检测行为（优先级从高到低）：
-        # 1. 瞬时峰值 (INSTANT_SPIKE) - 最严重的突发，延迟或丢包达到极值且持续时间极短
+        # 按行为严重性从高到低检测，确保每种行为都能被正确识别
+        # 1. 瞬时峰值 (INSTANT_SPIKE) - 最严重，延迟或丢包达到极值且持续时间极短
         if self._detect_instant_spike(delays, loss_rates):
-            return self.BEHAVIOR_LABELS["INSTANT_SPIKE"]
+            return BEHAVIOR_LABELS["INSTANT_SPIKE"]
 
-        # 2. Strong Burst (强突发) - 高延迟高丢包且持续一段时间
+        # 2. 低延迟高丢包 (LOW_DELAY_HIGH_LOSS) - 延迟低但丢包严重，网络不稳定
+        # 添加明确的阈值范围：延迟足够低，丢包率足够高
+        if (
+            delay_mean < thresholds["delay_mean_low"] * 0.8  # 延迟低于低延迟阈值的80%
+            and loss_mean
+            > thresholds["loss_mean_high"] * 1.2  # 丢包率高于高丢包率阈值的120%
+            and delay_mean > 0  # 确保延迟是正数
+            and loss_mean > 0.1  # 确保丢包率至少为10%
+        ):
+            return BEHAVIOR_LABELS["LOW_DELAY_HIGH_LOSS"]
+
+        # 3. 强突发 (STRONG_BURST) - 高延迟高丢包且持续时间长
         if self._detect_strong_burst(delays, loss_rates):
-            return self.BEHAVIOR_LABELS["STRONG_BURST"]
+            return BEHAVIOR_LABELS["STRONG_BURST"]
 
-        # 3. 持续高丢包 (HIGH_LOSS_STEADY) - 持续严重丢包，波动较小
+        # 4. 持续高丢包 (HIGH_LOSS_STEADY) - 持续严重丢包，波动小
         if (
             loss_mean > thresholds["loss_mean_high"]
             and loss_std < thresholds["loss_std_high"]
         ):
-            return self.BEHAVIOR_LABELS["HIGH_LOSS_STEADY"]
+            return BEHAVIOR_LABELS["HIGH_LOSS_STEADY"]
 
-        # 4. 高延迟无丢包 (HIGH_DELAY_NO_LOSS) - 高延迟但丢包率低，网络拥堵但无数据丢失
+        # 5. 高延迟无丢包 (HIGH_DELAY_NO_LOSS) - 延迟高但无数据丢失
         if (
             delay_mean > thresholds["delay_mean_high"]
             and loss_mean <= thresholds["loss_mean_low"]
         ):
-            return self.BEHAVIOR_LABELS["HIGH_DELAY_NO_LOSS"]
+            return BEHAVIOR_LABELS["HIGH_DELAY_NO_LOSS"]
 
-        # 5. 低延迟高丢包 (LOW_DELAY_HIGH_LOSS) - 低延迟但丢包率高，网络不稳定
+        # 6. 频繁波动 (FREQUENT_FLUCTUATION) - 延迟和丢包率都有较大波动
+        # 使用变异系数作为波动指标，更能反映数据的相对波动程度
+        delay_cv = delay_std / delay_mean if delay_mean > 0 else 0
+        loss_cv = loss_std / loss_mean if loss_mean > 0 else 0
+
+        # 计算变异系数阈值
+        delay_cv_threshold = 0.5  # 变异系数超过50%表示波动较大
+        loss_cv_threshold = 1.0  # 丢包率变异系数超过100%表示波动较大
+
         if (
-            delay_mean < thresholds["delay_mean_low"]
-            and loss_mean > thresholds["loss_mean_high"]
-        ):
-            return self.BEHAVIOR_LABELS["LOW_DELAY_HIGH_LOSS"]
+            delay_cv > delay_cv_threshold or delay_std > thresholds["delay_std_high"]
+        ) and (loss_cv > loss_cv_threshold or loss_std > thresholds["loss_std_high"]):
+            return BEHAVIOR_LABELS["FREQUENT_FLUCTUATION"]
 
-        # 6. Weak Burst (弱突发) - 中等丢包率，延迟上升趋势，波动较大
+        # 7. 弱突发 (WEAK_BURST) - 中等丢包率，轻微网络波动
         if self._detect_weak_burst(
             loss_mean, loss_std, delay_std, delays, row, available_features, thresholds
         ):
-            return self.BEHAVIOR_LABELS["WEAK_BURST"]
+            return BEHAVIOR_LABELS["WEAK_BURST"]
 
-        # 7. 频繁波动 (FREQUENT_FLUCTUATION) - 延迟和丢包率都有较大波动
-        # 放在Weak Burst之后，避免误判，因为频繁波动的影响相对较弱
-        if (
-            delay_std > thresholds["delay_std_high"]
-            and loss_std > thresholds["loss_std_high"]
-        ):
-            return self.BEHAVIOR_LABELS["FREQUENT_FLUCTUATION"]
+        # 8. 稳定行为 (STABLE) - 正常网络状态，低延迟，低丢包，低波动
+        # 稳定行为条件：优化条件，提高与WEAK_BURST的区分度
+        is_stable = (
+            loss_mean <= thresholds["loss_mean_low"] * 1.3  # 适度严格的丢包率阈值
+            and delay_std < thresholds["delay_std_high"] / 2.0  # 适度严格的延迟波动要求
+            and loss_std < thresholds["loss_std_high"] / 2.0  # 适度严格的丢包率波动要求
+            and delay_mean
+            < thresholds["delay_mean_high"] * 0.85  # 适度严格的延迟均值要求
+        )
+        if is_stable:
+            return BEHAVIOR_LABELS["STABLE"]
 
-        # 8. 默认行为：稳定 (STABLE) - 所有条件都不满足，网络状态稳定
-        return self.BEHAVIOR_LABELS["STABLE"]
+        # 默认行为：稳定 (STABLE) - 所有条件都不满足，网络状态稳定
+        return BEHAVIOR_LABELS["STABLE"]
 
     def _calculate_dynamic_thresholds(
-        self, features_df: pd.DataFrame, raw_data_df: pd.DataFrame = None
+        self, features_df: pd.DataFrame, raw_data_df: pd.DataFrame
     ) -> Dict[str, float]:
-        """计算动态阈值
+        """使用配置中的静态阈值，不再从原始数据计算动态阈值
 
         Args:
             features_df (pd.DataFrame): 包含特征数据的DataFrame
-            raw_data_df (pd.DataFrame, optional): 原始数据DataFrame，可选
-                - 推荐：提供原始数据，可获得更准确的阈值计算
-                - 降级模式：无原始数据时，从特征列推断阈值，但精度可能下降
+            raw_data_df (pd.DataFrame): 原始数据DataFrame
 
         Returns:
-            Dict[str, float]: 计算得到的阈值字典
+            Dict[str, float]: 配置中的静态阈值字典
 
         Examples:
             >>> from network_simulation.pattern_discovery.pattern_identifier import PatternIdentifier
@@ -634,24 +735,27 @@ class PatternIdentifier:
             ...     'feat_delay1_mean': np.random.normal(50, 10, 100),
             ...     'feat_loss1_mean': np.random.choice([0, 0.01, 0.05], 100)
             ... })
-            >>> thresholds = pattern_identifier._calculate_dynamic_thresholds(features_df)
-            >>> print(f"计算的动态阈值: {thresholds}")
+            >>> raw_data_df = pd.DataFrame({
+            ...     'delay1': np.random.normal(50, 10, 1000),
+            ...     'loss_rate1': np.random.choice([0, 0.01, 0.05], 1000),
+            ...     'delay2': np.random.normal(60, 15, 1000),
+            ...     'loss_rate2': np.random.choice([0, 0.01, 0.05], 1000)
+            ... })
+            >>> thresholds = pattern_identifier._calculate_dynamic_thresholds(features_df, raw_data_df)
+            >>> print(f"使用配置中的静态阈值: {thresholds}")
         """
-        thresholds = {}
+        # 直接使用配置中的静态阈值
+        del features_df, raw_data_df  # 避免未使用参数警告
+        thresholds = {
+            "delay_mean_low": self.DEFAULT_DELAY_MEAN_LOW,
+            "delay_mean_high": self.DEFAULT_DELAY_MEAN_HIGH,
+            "delay_std_high": self.DEFAULT_DELAY_STD_HIGH,
+            "loss_mean_low": self.DEFAULT_LOSS_MEAN_LOW,
+            "loss_mean_high": self.DEFAULT_LOSS_MEAN_HIGH,
+            "loss_std_high": self.DEFAULT_LOSS_STD_HIGH,
+        }
 
-        if raw_data_df is not None:
-            # 使用原始数据计算阈值 - 推荐模式，精度更高
-            logger.info("使用原始数据计算动态阈值")
-            self._calculate_thresholds_from_raw_data(raw_data_df, thresholds)
-        else:
-            # 使用特征列计算阈值 - 降级模式，精度可能下降
-            logger.warning("无原始数据，从特征列推断阈值，结果可能不够准确")
-            self._calculate_thresholds_from_features(features_df, thresholds)
-
-        # 设置默认阈值，确保所有必要的阈值都存在
-        self._set_default_thresholds(thresholds)
-
-        logger.debug(f"计算动态阈值: {thresholds}")
+        logger.debug(f"使用配置中的静态阈值: {thresholds}")
         return thresholds
 
     def _calculate_thresholds_from_raw_data(
@@ -690,7 +794,10 @@ class PatternIdentifier:
         # 计算分位数作为阈值
         thresholds["delay_mean_low"] = np.percentile(delays, 25)  # 低延迟阈值
         thresholds["delay_mean_high"] = np.percentile(delays, 75)  # 高延迟阈值
-        thresholds["loss_mean_low"] = np.percentile(loss_rates, 25)  # 低丢包率阈值
+        # 调整丢包率阈值，让更多数据被判定为稳定类
+        thresholds["loss_mean_low"] = np.percentile(
+            loss_rates, 50
+        )  # 低丢包率阈值 - 使用50%分位数，让更多数据被认为是低丢包率
         thresholds["loss_mean_high"] = np.percentile(loss_rates, 75)  # 高丢包率阈值
 
         # 安全计算延迟标准差阈值
@@ -734,108 +841,26 @@ class PatternIdentifier:
                 .dropna()
                 .values
             )
-            thresholds[threshold_key] = np.percentile(rolling_std, 75)
+            thresholds[threshold_key] = np.percentile(
+                rolling_std, 50
+            )  # 调整为50%分位数，让更多窗口被认为是低波动
         elif len(data) > 1:
             # 数据点不足一个窗口但大于1个，计算整体标准差
-            thresholds[threshold_key] = np.std(data)
+            thresholds[threshold_key] = (
+                np.std(data) * 0.5
+            )  # 调整为整体标准差的一半，让更多窗口被认为是低波动
         else:
             # 数据点过少，使用全局默认阈值
             if threshold_key == "delay_std_high":
-                thresholds[threshold_key] = self.DEFAULT_DELAY_STD_HIGH
+                thresholds[threshold_key] = (
+                    self.DEFAULT_DELAY_STD_HIGH * 0.5
+                )  # 调整为默认值的一半，让更多窗口被认为是低波动
             elif threshold_key == "loss_std_high":
-                thresholds[threshold_key] = self.DEFAULT_LOSS_STD_HIGH
+                thresholds[threshold_key] = (
+                    self.DEFAULT_LOSS_STD_HIGH * 0.5
+                )  # 调整为默认值的一半，让更多窗口被认为是低波动
             else:
                 thresholds[threshold_key] = 0.0
-
-    def _calculate_thresholds_from_features(
-        self, features_df: pd.DataFrame, thresholds: Dict
-    ) -> None:
-        """从特征列计算阈值
-
-        注意：延迟特征（如 feat_delay1_mean）基于对数尺度 (log(1+delay)) 计算，因此延迟阈值也基于对数尺度。
-
-        Args:
-            features_df (pd.DataFrame): 包含特征数据的DataFrame
-            thresholds (Dict): 阈值字典，用于存储计算结果
-
-        Examples:
-            >>> from network_simulation.pattern_discovery.pattern_identifier import PatternIdentifier
-            >>> import pandas as pd
-            >>> import numpy as np
-            >>> config = { /* 配置参数 */ }
-            >>> pattern_identifier = PatternIdentifier(config=config)
-            >>> features_df = pd.DataFrame({
-            ...     'feat_delay1_mean': np.random.normal(3.9, 0.2, 100),  # 对数尺度
-            ...     'feat_loss1_mean': np.random.choice([0, 0.01, 0.05, 0.1], 100),
-            ...     'feat_delay1_std': np.random.normal(0.1, 0.05, 100),
-            ...     'feat_loss1_std': np.random.normal(0.02, 0.01, 100)
-            ... })
-            >>> thresholds = {}
-            >>> pattern_identifier._calculate_thresholds_from_features(features_df, thresholds)
-            >>> print(f"从特征列计算的阈值: {thresholds}")
-        """
-        # 收集所有延迟和丢包特征，用于计算阈值
-        delay_std_features = []
-        delay_mean_features = []
-        loss_std_features = []
-        loss_mean_features = []
-
-        for feat in self.feature_columns:
-            if "delay" in feat:
-                if "std" in feat:
-                    delay_std_features.append(feat)
-                elif "mean" in feat:
-                    delay_mean_features.append(feat)
-            elif "loss" in feat:
-                if "std" in feat:
-                    loss_std_features.append(feat)
-                elif "mean" in feat:
-                    loss_mean_features.append(feat)
-
-        # 计算延迟相关阈值 - 基于对数尺度特征
-        if delay_mean_features:
-            # 合并所有延迟均值特征数据
-            all_delay_means = np.concatenate(
-                [features_df[feat].values for feat in delay_mean_features]
-            )
-            # 从对数尺度特征分布中计算阈值
-            thresholds["delay_mean_low"] = np.percentile(all_delay_means, 25)
-            thresholds["delay_mean_high"] = np.percentile(all_delay_means, 75)
-            logger.debug(
-                f"基于对数尺度特征计算延迟阈值: delay_mean_low={thresholds['delay_mean_low']:.4f}, delay_mean_high={thresholds['delay_mean_high']:.4f}"
-            )
-
-        if delay_std_features:
-            # 合并所有延迟标准差特征数据
-            all_delay_stds = np.concatenate(
-                [features_df[feat].values for feat in delay_std_features]
-            )
-            thresholds["delay_std_high"] = np.percentile(all_delay_stds, 75)
-            logger.debug(
-                f"基于对数尺度特征计算延迟标准差阈值: delay_std_high={thresholds['delay_std_high']:.4f}"
-            )
-
-        # 计算丢包相关阈值
-        if loss_mean_features:
-            # 合并所有丢包均值特征数据
-            all_loss_means = np.concatenate(
-                [features_df[feat].values for feat in loss_mean_features]
-            )
-            thresholds["loss_mean_low"] = np.percentile(all_loss_means, 25)
-            thresholds["loss_mean_high"] = np.percentile(all_loss_means, 75)
-            logger.debug(
-                f"计算丢包率均值阈值: loss_mean_low={thresholds['loss_mean_low']:.4f}, loss_mean_high={thresholds['loss_mean_high']:.4f}"
-            )
-
-        if loss_std_features:
-            # 合并所有丢包标准差特征数据
-            all_loss_stds = np.concatenate(
-                [features_df[feat].values for feat in loss_std_features]
-            )
-            thresholds["loss_std_high"] = np.percentile(all_loss_stds, 75)
-            logger.debug(
-                f"计算丢包率标准差阈值: loss_std_high={thresholds['loss_std_high']:.4f}"
-            )
 
     def _set_default_thresholds(self, thresholds: Dict) -> None:
         """设置默认阈值
@@ -866,148 +891,10 @@ class PatternIdentifier:
         thresholds.setdefault("loss_mean_high", self.DEFAULT_LOSS_MEAN_HIGH)
         thresholds.setdefault("loss_std_high", self.DEFAULT_LOSS_STD_HIGH)
 
-    def _detect_behavior_without_raw_data(
-        self, row: pd.Series, available_features: list, thresholds: Dict[str, float]
-    ) -> int:
-        """无原始数据时检测行为
-
-        注意：
-        1. 延迟特征（如 feat_delay1_mean）基于对数尺度 (log(1+delay)) 计算
-        2. 延迟相关阈值（如 delay_mean_low）也基于对数尺度
-        3. 因此直接比较特征值和阈值是合理的，无需反变换
-
-        Args:
-            row (pd.Series): 特征数据行
-            available_features (list): 可用特征列表
-            thresholds (Dict[str, float]): 动态计算的阈值字典
-
-        Returns:
-            int: 行为标签
-
-        Examples:
-            >>> from network_simulation.pattern_discovery.pattern_identifier import PatternIdentifier
-            >>> import pandas as pd
-            >>> config = { /* 配置参数 */ }
-            >>> pattern_identifier = PatternIdentifier(config=config)
-            >>> row = pd.Series({
-            ...     'feat_loss1_mean': 0.08,
-            ...     'feat_delay1_std': 0.15,
-            ...     'feat_loss1_std': 0.03,
-            ...     'feat_max_congestion_run1': 5
-            ... })
-            >>> available_features = ['feat_loss1_mean', 'feat_delay1_std', 'feat_loss1_std', 'feat_max_congestion_run1']
-            >>> thresholds = {
-            ...     'loss_mean_high': 0.1,
-            ...     'delay_std_high': 0.2,
-            ...     'loss_std_high': 0.05
-            ... }
-            >>> behavior_label = pattern_identifier._detect_behavior_without_raw_data(row, available_features, thresholds)
-            >>> print(f"检测到的行为标签: {behavior_label}")
-        """
-        # 注意：特征值可能已标准化，部分行为判定受限
-
-        # 检查是否存在上下行特征
-        has_up_down_features = any(
-            col.endswith("1") or col.endswith("2") for col in available_features
-        )
-
-        # 选择要使用的特征列
-        if has_up_down_features:
-            # 优先使用上行特征进行单通道检测（可扩展为同时检查上下行）
-            loss_mean_col = (
-                "feat_loss1_mean"
-                if "feat_loss1_mean" in available_features
-                else "feat_loss2_mean"
-            )
-            delay_std_col = (
-                "feat_delay1_std"
-                if "feat_delay1_std" in available_features
-                else "feat_delay2_std"
-            )
-            loss_std_col = (
-                "feat_loss1_std"
-                if "feat_loss1_std" in available_features
-                else "feat_loss2_std"
-            )
-            # 基于绝对延迟值的行为判断必须使用原始尺度
-            # 只使用原始尺度延迟均值，不 fallback 到对数尺度
-            delay_mean_col = None
-            if "feat_delay1_raw_mean" in available_features:
-                delay_mean_col = "feat_delay1_raw_mean"
-            elif "feat_delay2_raw_mean" in available_features:
-                delay_mean_col = "feat_delay2_raw_mean"
-            congestion_run_col = (
-                "feat_max_congestion_run1"
-                if "feat_max_congestion_run1" in available_features
-                else "feat_max_congestion_run2"
-            )
-            loss_nonzero_ratio_col = (
-                "feat_loss1_nonzero_ratio"
-                if "feat_loss1_nonzero_ratio" in available_features
-                else "feat_loss2_nonzero_ratio"
-            )
-        else:
-            # 使用单通道特征
-            loss_mean_col = "feat_loss_mean"
-            delay_std_col = "feat_delay_std"
-            loss_std_col = "feat_loss_std"
-            # 基于绝对延迟值的行为判断必须使用原始尺度
-            # 只使用原始尺度延迟均值，不 fallback 到对数尺度
-            delay_mean_col = (
-                "feat_delay_raw_mean"
-                if "feat_delay_raw_mean" in available_features
-                else None
-            )
-            congestion_run_col = "feat_max_congestion_run"
-            loss_nonzero_ratio_col = "feat_loss_nonzero_ratio"
-
-        # 检测行为 5: 持续高丢包
-        if (
-            loss_mean_col in available_features
-            and row[loss_mean_col] > thresholds["loss_mean_high"]
-        ):
-            return self.BEHAVIOR_LABELS["HIGH_LOSS_STEADY"]
-        # 检测行为 6: 频繁波动
-        elif (
-            delay_std_col in available_features
-            and row[delay_std_col] > thresholds["delay_std_high"]
-        ) and (
-            loss_std_col in available_features
-            and row[loss_std_col] > thresholds["loss_std_high"]
-        ):
-            return self.BEHAVIOR_LABELS["FREQUENT_FLUCTUATION"]
-        # 检测行为 7: 低延迟高丢包 - 只有当原始尺度延迟均值存在时才检测
-        elif (
-            delay_mean_col is not None
-            and delay_mean_col in available_features
-            and row[delay_mean_col] < thresholds["delay_mean_low"]
-        ) and (
-            loss_mean_col in available_features
-            and row[loss_mean_col] > thresholds["loss_mean_high"]
-        ):
-            return self.BEHAVIOR_LABELS["LOW_DELAY_HIGH_LOSS"]
-        # 检测行为 2: Strong Burst
-        elif (
-            congestion_run_col in available_features
-            and row[congestion_run_col] >= self.STRONG_BURST_MIN_RUN
-        ):
-            return self.BEHAVIOR_LABELS["STRONG_BURST"]
-        # 检测行为 1: Weak Burst
-        elif (
-            loss_nonzero_ratio_col in available_features
-            and row[loss_nonzero_ratio_col] > self.WEAK_BURST_LOSS_NONZERO_RATIO
-        ):
-            return self.BEHAVIOR_LABELS["WEAK_BURST"]
-        # 默认为Stable
-        # 注意：在无原始数据时，行为3（瞬时峰值）和行为4（高延迟无丢包）未被检测
-        # 这些行为需要原始数据的绝对尺度，特征值可能已标准化
-        else:
-            return self.BEHAVIOR_LABELS["STABLE"]
-
     def _perform_rule_based_detection(
         self,
         features_df: pd.DataFrame,
-        raw_data_df: pd.DataFrame = None,
+        raw_data_df: pd.DataFrame,
         thresholds: Dict[str, float] = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """执行规则事件检测，识别网络行为模式
@@ -1016,10 +903,11 @@ class PatternIdentifier:
         - 该方法返回上下行独立的行为标签数组，这是因为网络的上行和下行可能表现出不同的行为模式
         - 建议用户分别处理上下行标签，以获得更准确的网络状态分析
         - 如果上下行特征相同，上下行标签也会相同
+        - 该方法必须提供raw_data_df，以确保所有8种行为模式都能被正确检测
 
         Args:
-            features_df (pd.DataFrame): 包含特征数据的DataFrame，当提供raw_data_df时，必须包含window_start和window_end列
-            raw_data_df (pd.DataFrame, optional): 原始数据DataFrame，可选，其索引必须是连续的行号[0, 1, 2, ...]
+            features_df (pd.DataFrame): 包含特征数据的DataFrame，必须包含window_start和window_end列
+            raw_data_df (pd.DataFrame): 原始数据DataFrame，其索引必须是连续的行号[0, 1, 2, ...]
             thresholds (Dict[str, float], optional): 动态计算的阈值字典
 
         Returns:
@@ -1034,12 +922,20 @@ class PatternIdentifier:
             >>> config = { /* 配置参数 */ }
             >>> pattern_identifier = PatternIdentifier(config=config)
             >>> features_df = pd.DataFrame({
-            ...     'feat_delay1_mean': np.random.normal(3.9, 0.2, 100),
-            ...     'feat_loss1_mean': np.random.choice([0, 0.01, 0.05], 100),
-            ...     'feat_delay2_mean': np.random.normal(4.0, 0.25, 100),
-            ...     'feat_loss2_mean': np.random.choice([0, 0.01, 0.05, 0.1], 100)
+            ...     'window_start': [0, 50, 100],
+            ...     'window_end': [50, 100, 150],
+            ...     'feat_delay1_mean': np.random.normal(3.9, 0.2, 3),
+            ...     'feat_loss1_mean': np.random.choice([0, 0.01, 0.05], 3),
+            ...     'feat_delay2_mean': np.random.normal(4.0, 0.25, 3),
+            ...     'feat_loss2_mean': np.random.choice([0, 0.01, 0.05, 0.1], 3)
             ... })
-            >>> labels_up, labels_down = pattern_identifier._perform_rule_based_detection(features_df)
+            >>> raw_data_df = pd.DataFrame({
+            ...     'delay1': np.random.normal(50, 10, 150),
+            ...     'loss_rate1': np.random.choice([0, 0.01, 0.05], 150),
+            ...     'delay2': np.random.normal(60, 15, 150),
+            ...     'loss_rate2': np.random.choice([0, 0.01, 0.05], 150)
+            ... })
+            >>> labels_up, labels_down = pattern_identifier._perform_rule_based_detection(features_df, raw_data_df)
             >>> print(f"上行标签数量: {len(labels_up)}, 下行标签数量: {len(labels_down)}")
         """
         if thresholds is None:
@@ -1050,20 +946,10 @@ class PatternIdentifier:
         # 获取可用的特征列
         available_features = features_df.columns.tolist()
 
-        # 逐个窗口进行行为判定
-        if raw_data_df is not None:
-            # 有原始数据时，需要逐窗口处理原始数据
-            labels_up, labels_down = self._detect_with_raw_data(
-                features_df, raw_data_df, available_features, thresholds
-            )
-        else:
-            # 无原始数据时，使用向量化操作进行批量处理，提高性能
-            logger.warning(
-                "未提供 raw_data_df，部分行为（如 INSTANT_SPIKE, HIGH_DELAY_NO_LOSS, LOW_DELAY_HIGH_LOSS）无法检测"
-            )
-            labels_up, labels_down = self._detect_without_raw_data(
-                features_df, available_features, thresholds
-            )
+        # 有原始数据时，需要逐窗口处理原始数据，确保所有行为模式都能被检测
+        labels_up, labels_down = self._detect_with_raw_data(
+            features_df, raw_data_df, available_features, thresholds
+        )
 
         logger.info("规则事件检测完成")
 
@@ -1125,10 +1011,8 @@ class PatternIdentifier:
             >>> print(f"上行标签: {labels_up}, 下行标签: {labels_down}")
         """
         # 初始化上下行行为标签数组，默认为STABLE
-        labels_up = np.full(len(features_df), self.BEHAVIOR_LABELS["STABLE"], dtype=int)
-        labels_down = np.full(
-            len(features_df), self.BEHAVIOR_LABELS["STABLE"], dtype=int
-        )
+        labels_up = np.full(len(features_df), BEHAVIOR_LABELS["STABLE"], dtype=int)
+        labels_down = np.full(len(features_df), BEHAVIOR_LABELS["STABLE"], dtype=int)
 
         # 假设所有数据都包含完整的上下行数据
         logger.debug("检测到完整的上下行数据")
@@ -1144,8 +1028,8 @@ class PatternIdentifier:
                 logger.warning(
                     f"窗口 {i} 无效: window_start={window_start}, window_end={window_end}, raw_data_length={len(raw_data_df)}"
                 )
-                labels_up[i] = self.BEHAVIOR_LABELS["INVALID"]
-                labels_down[i] = self.BEHAVIOR_LABELS["INVALID"]
+                labels_up[i] = BEHAVIOR_LABELS["INVALID"]
+                labels_down[i] = BEHAVIOR_LABELS["INVALID"]
                 continue  # 直接跳过无效窗口，避免冗余计算
 
             # 提取窗口数据
@@ -1167,8 +1051,8 @@ class PatternIdentifier:
                 or len(loss_rate2) == 0
             ):
                 logger.warning(f"窗口 {i} 数据为空，标记为无效窗口")
-                labels_up[i] = self.BEHAVIOR_LABELS["INVALID"]
-                labels_down[i] = self.BEHAVIOR_LABELS["INVALID"]
+                labels_up[i] = BEHAVIOR_LABELS["INVALID"]
+                labels_down[i] = BEHAVIOR_LABELS["INVALID"]
                 continue  # 直接跳过空数据窗口
 
             # 对上下行数据分别检测行为
@@ -1235,20 +1119,57 @@ class PatternIdentifier:
         logger.info("无原始数据，使用向量化操作进行批量行为检测")
 
         # 初始化上下行行为标签
-        labels_up = np.full(len(features_df), self.BEHAVIOR_LABELS["STABLE"], dtype=int)
-        labels_down = np.full(
-            len(features_df), self.BEHAVIOR_LABELS["STABLE"], dtype=int
-        )
+        labels_up = np.full(len(features_df), BEHAVIOR_LABELS["STABLE"], dtype=int)
+        labels_down = np.full(len(features_df), BEHAVIOR_LABELS["STABLE"], dtype=int)
 
         # 检测上行行为
         if self._has_up_features(available_features):
             logger.debug("检测到上行特征，开始上行行为检测")
+            # 首先检测稳定类 (STABLE) - 正常网络状态，优先级最高
+            stable_mask1 = np.ones(len(features_df), dtype=bool)
+
+            # 条件1: 低丢包率
+            loss_mean_col = "feat_loss1_mean"
+            if loss_mean_col in available_features:
+                stable_mask1 &= (
+                    features_df[loss_mean_col] <= thresholds["loss_mean_low"] * 2
+                )  # 放宽丢包率阈值
+
+            # 条件2: 低延迟波动
+            delay_std_col = "feat_delay1_std"
+            if delay_std_col in available_features:
+                stable_mask1 &= (
+                    features_df[delay_std_col] < thresholds["delay_std_high"] / 2
+                )
+
+            # 条件3: 低丢包率波动
+            loss_std_col = "feat_loss1_std"
+            if loss_std_col in available_features:
+                stable_mask1 &= (
+                    features_df[loss_std_col] < thresholds["loss_std_high"] / 2
+                )
+
+            # 条件4: 无Strong Burst
+            congestion_col = "feat_max_congestion_run1"
+            if congestion_col in available_features:
+                stable_mask1 &= features_df[congestion_col] < self.STRONG_BURST_MIN_RUN
+
+            # 设置稳定类标签
+            labels_up[stable_mask1] = BEHAVIOR_LABELS["STABLE"]
+
+            # 只在非稳定窗口上检测其他行为
+            non_stable_mask1 = ~stable_mask1
+
             # 检测行为 5: 持续高丢包
             if "feat_loss1_mean" in available_features:
                 high_loss_mask1 = (
                     features_df["feat_loss1_mean"] > thresholds["loss_mean_high"]
-                )
-                labels_up[high_loss_mask1] = self.BEHAVIOR_LABELS["HIGH_LOSS_STEADY"]
+                ) & non_stable_mask1
+                labels_up[high_loss_mask1] = BEHAVIOR_LABELS["HIGH_LOSS_STEADY"]
+
+            # 更新非稳定窗口掩码
+            non_stable_mask1 = labels_up == BEHAVIOR_LABELS["STABLE"]
+            non_stable_mask1 = ~non_stable_mask1
 
             # 检测行为 6: 频繁波动
             if (
@@ -1256,11 +1177,17 @@ class PatternIdentifier:
                 and "feat_loss1_std" in available_features
             ):
                 frequent_fluctuation_mask1 = (
-                    features_df["feat_delay1_std"] > thresholds["delay_std_high"]
-                ) & (features_df["feat_loss1_std"] > thresholds["loss_std_high"])
-                labels_up[frequent_fluctuation_mask1] = self.BEHAVIOR_LABELS[
+                    (features_df["feat_delay1_std"] > thresholds["delay_std_high"])
+                    & (features_df["feat_loss1_std"] > thresholds["loss_std_high"])
+                    & non_stable_mask1
+                )
+                labels_up[frequent_fluctuation_mask1] = BEHAVIOR_LABELS[
                     "FREQUENT_FLUCTUATION"
                 ]
+
+            # 更新非稳定窗口掩码
+            non_stable_mask1 = labels_up == BEHAVIOR_LABELS["STABLE"]
+            non_stable_mask1 = ~non_stable_mask1
 
             # 检测行为 7: 低延迟高丢包 - 只使用原始尺度延迟均值
             # 基于绝对延迟值的行为判断必须使用原始尺度
@@ -1269,36 +1196,88 @@ class PatternIdentifier:
                 and "feat_loss1_mean" in available_features
             ):
                 low_delay_high_loss_mask1 = (
-                    features_df["feat_delay1_raw_mean"] < thresholds["delay_mean_low"]
-                ) & (features_df["feat_loss1_mean"] > thresholds["loss_mean_high"])
-                labels_up[low_delay_high_loss_mask1] = self.BEHAVIOR_LABELS[
+                    (features_df["feat_delay1_raw_mean"] < thresholds["delay_mean_low"])
+                    & (features_df["feat_loss1_mean"] > thresholds["loss_mean_high"])
+                    & non_stable_mask1
+                )
+                labels_up[low_delay_high_loss_mask1] = BEHAVIOR_LABELS[
                     "LOW_DELAY_HIGH_LOSS"
                 ]
+
+            # 更新非稳定窗口掩码
+            non_stable_mask1 = labels_up == BEHAVIOR_LABELS["STABLE"]
+            non_stable_mask1 = ~non_stable_mask1
 
             # 检测行为 2: Strong Burst
             if "feat_max_congestion_run1" in available_features:
                 strong_burst_mask1 = (
                     features_df["feat_max_congestion_run1"] >= self.STRONG_BURST_MIN_RUN
-                )
-                labels_up[strong_burst_mask1] = self.BEHAVIOR_LABELS["STRONG_BURST"]
+                ) & non_stable_mask1
+                labels_up[strong_burst_mask1] = BEHAVIOR_LABELS["STRONG_BURST"]
+
+            # 更新非稳定窗口掩码
+            non_stable_mask1 = labels_up == BEHAVIOR_LABELS["STABLE"]
+            non_stable_mask1 = ~non_stable_mask1
 
             # 检测行为 1: Weak Burst
-            weak_burst_mask1 = self._detect_weak_burst_without_raw_data(
-                features_df, available_features, thresholds, direction="up"
+            weak_burst_mask1 = (
+                self._detect_weak_burst_without_raw_data(
+                    features_df, available_features, thresholds, direction="up"
+                )
+                & non_stable_mask1
             )
-            labels_up[weak_burst_mask1] = self.BEHAVIOR_LABELS["WEAK_BURST"]
+            labels_up[weak_burst_mask1] = BEHAVIOR_LABELS["WEAK_BURST"]
         else:
             logger.warning("未检测到完整的上行特征，跳过上行行为检测")
 
         # 检测下行行为
         if self._has_down_features(available_features):
             logger.debug("检测到下行特征，开始下行行为检测")
+            # 首先检测稳定类 (STABLE) - 正常网络状态，优先级最高
+            stable_mask2 = np.ones(len(features_df), dtype=bool)
+
+            # 条件1: 低丢包率
+            loss_mean_col = "feat_loss2_mean"
+            if loss_mean_col in available_features:
+                stable_mask2 &= (
+                    features_df[loss_mean_col] <= thresholds["loss_mean_low"] * 2
+                )  # 放宽丢包率阈值
+
+            # 条件2: 低延迟波动
+            delay_std_col = "feat_delay2_std"
+            if delay_std_col in available_features:
+                stable_mask2 &= (
+                    features_df[delay_std_col] < thresholds["delay_std_high"] / 2
+                )
+
+            # 条件3: 低丢包率波动
+            loss_std_col = "feat_loss2_std"
+            if loss_std_col in available_features:
+                stable_mask2 &= (
+                    features_df[loss_std_col] < thresholds["loss_std_high"] / 2
+                )
+
+            # 条件4: 无Strong Burst
+            congestion_col = "feat_max_congestion_run2"
+            if congestion_col in available_features:
+                stable_mask2 &= features_df[congestion_col] < self.STRONG_BURST_MIN_RUN
+
+            # 设置稳定类标签
+            labels_down[stable_mask2] = BEHAVIOR_LABELS["STABLE"]
+
+            # 只在非稳定窗口上检测其他行为
+            non_stable_mask2 = ~stable_mask2
+
             # 检测行为 5: 持续高丢包
             if "feat_loss2_mean" in available_features:
                 high_loss_mask2 = (
                     features_df["feat_loss2_mean"] > thresholds["loss_mean_high"]
-                )
-                labels_down[high_loss_mask2] = self.BEHAVIOR_LABELS["HIGH_LOSS_STEADY"]
+                ) & non_stable_mask2
+                labels_down[high_loss_mask2] = BEHAVIOR_LABELS["HIGH_LOSS_STEADY"]
+
+            # 更新非稳定窗口掩码
+            non_stable_mask2 = labels_down == BEHAVIOR_LABELS["STABLE"]
+            non_stable_mask2 = ~non_stable_mask2
 
             # 检测行为 6: 频繁波动
             if (
@@ -1306,11 +1285,17 @@ class PatternIdentifier:
                 and "feat_loss2_std" in available_features
             ):
                 frequent_fluctuation_mask2 = (
-                    features_df["feat_delay2_std"] > thresholds["delay_std_high"]
-                ) & (features_df["feat_loss2_std"] > thresholds["loss_std_high"])
-                labels_down[frequent_fluctuation_mask2] = self.BEHAVIOR_LABELS[
+                    (features_df["feat_delay2_std"] > thresholds["delay_std_high"])
+                    & (features_df["feat_loss2_std"] > thresholds["loss_std_high"])
+                    & non_stable_mask2
+                )
+                labels_down[frequent_fluctuation_mask2] = BEHAVIOR_LABELS[
                     "FREQUENT_FLUCTUATION"
                 ]
+
+            # 更新非稳定窗口掩码
+            non_stable_mask2 = labels_down == BEHAVIOR_LABELS["STABLE"]
+            non_stable_mask2 = ~non_stable_mask2
 
             # 检测行为 7: 低延迟高丢包 - 只使用原始尺度延迟均值
             # 基于绝对延迟值的行为判断必须使用原始尺度
@@ -1319,24 +1304,37 @@ class PatternIdentifier:
                 and "feat_loss2_mean" in available_features
             ):
                 low_delay_high_loss_mask2 = (
-                    features_df["feat_delay2_raw_mean"] < thresholds["delay_mean_low"]
-                ) & (features_df["feat_loss2_mean"] > thresholds["loss_mean_high"])
-                labels_down[low_delay_high_loss_mask2] = self.BEHAVIOR_LABELS[
+                    (features_df["feat_delay2_raw_mean"] < thresholds["delay_mean_low"])
+                    & (features_df["feat_loss2_mean"] > thresholds["loss_mean_high"])
+                    & non_stable_mask2
+                )
+                labels_down[low_delay_high_loss_mask2] = BEHAVIOR_LABELS[
                     "LOW_DELAY_HIGH_LOSS"
                 ]
+
+            # 更新非稳定窗口掩码
+            non_stable_mask2 = labels_down == BEHAVIOR_LABELS["STABLE"]
+            non_stable_mask2 = ~non_stable_mask2
 
             # 检测行为 2: Strong Burst
             if "feat_max_congestion_run2" in available_features:
                 strong_burst_mask2 = (
                     features_df["feat_max_congestion_run2"] >= self.STRONG_BURST_MIN_RUN
-                )
-                labels_down[strong_burst_mask2] = self.BEHAVIOR_LABELS["STRONG_BURST"]
+                ) & non_stable_mask2
+                labels_down[strong_burst_mask2] = BEHAVIOR_LABELS["STRONG_BURST"]
+
+            # 更新非稳定窗口掩码
+            non_stable_mask2 = labels_down == BEHAVIOR_LABELS["STABLE"]
+            non_stable_mask2 = ~non_stable_mask2
 
             # 检测行为 1: Weak Burst
-            weak_burst_mask2 = self._detect_weak_burst_without_raw_data(
-                features_df, available_features, thresholds, direction="down"
+            weak_burst_mask2 = (
+                self._detect_weak_burst_without_raw_data(
+                    features_df, available_features, thresholds, direction="down"
+                )
+                & non_stable_mask2
             )
-            labels_down[weak_burst_mask2] = self.BEHAVIOR_LABELS["WEAK_BURST"]
+            labels_down[weak_burst_mask2] = BEHAVIOR_LABELS["WEAK_BURST"]
         else:
             logger.warning("未检测到完整的下行特征，跳过下行行为检测")
 
@@ -1418,9 +1416,12 @@ class PatternIdentifier:
         delay_trend_col = f"feat_delay{suffix}_trend"
 
         # Stable行为条件：低延迟，低丢包，低波动
+        # 使用与主检测逻辑相同的宽松条件，确保稳定类成为多数类
         stable_mask = np.ones(len(features_df), dtype=bool)
         if loss_mean_col in available_features:
-            stable_mask &= features_df[loss_mean_col] <= thresholds["loss_mean_low"]
+            stable_mask &= (
+                features_df[loss_mean_col] <= thresholds["loss_mean_low"] * 2
+            )  # 放宽丢包率阈值
         if delay_std_col in available_features:
             stable_mask &= features_df[delay_std_col] < thresholds["delay_std_high"] / 2
         if loss_std_col in available_features:
@@ -1588,6 +1589,51 @@ class PatternIdentifier:
         # 保存模式识别结果
         self.save(patterns, output_patterns_dir)
 
+        # 生成包含原始文件名、未归一化特征值、行为ID和原始时延等数据的新文件格式
+        # 获取原始文件名（从input_processed_path中提取）
+        original_filename = input_processed_path.stem
+
+        # 准备新的DataFrame，包含未归一化特征值、行为ID和原始数据统计
+        features_df = pd.read_csv(input_features_path)
+        raw_data_df = pd.read_csv(input_processed_path, parse_dates=["timestamp"])
+        
+        # 获取特征列和原始数据列
+        feature_columns = [
+            col for col in features_df.columns if col.startswith("feat_")
+        ]
+        raw_data_columns = ["delay1", "loss_rate1", "delay2", "loss_rate2"]
+
+        # 确保结果中包含统一行为标签
+        if "unified_labels" not in patterns:
+            # 如果没有统一标签，使用上行标签
+            patterns["unified_labels"] = patterns["labels_up"]
+
+        # 创建新的DataFrame，包含所有特征列
+        new_df = features_df.copy()
+        new_df["behavior_id"] = patterns["unified_labels"]
+        new_df["original_filename"] = original_filename
+
+        # 添加原始时延等数据的统计信息
+        for i in range(len(new_df)):
+            window_start = int(new_df.iloc[i]["window_start"])
+            window_end = int(new_df.iloc[i]["window_end"])
+
+            # 提取窗口内的原始数据
+            window_data = raw_data_df.iloc[window_start:window_end]
+
+            # 计算原始数据的统计信息
+            for col in raw_data_columns:
+                if col in window_data.columns:
+                    new_df.loc[i, f"raw_{col}_mean"] = window_data[col].mean()
+                    new_df.loc[i, f"raw_{col}_std"] = window_data[col].std()
+                    new_df.loc[i, f"raw_{col}_min"] = window_data[col].min()
+                    new_df.loc[i, f"raw_{col}_max"] = window_data[col].max()
+
+        # 保存到新文件，文件名使用原始文件名，不包含"normalized"
+        new_file = output_patterns_dir / f"{original_filename}_features.csv"
+        new_df.to_csv(new_file, index=False)
+        logger.info(f"已保存未归一化特征、原始数据统计和行为ID到: {new_file}")
+
         logger.info(f"行为模式已保存到: {output_patterns_dir}")
         return patterns
 
@@ -1601,14 +1647,12 @@ class PatternIdentifier:
             np.ndarray: 归一化的状态转移矩阵，只包含有效行为标签
         """
         # 过滤掉INVALID标签，只保留有效标签
-        valid_mask = labels != self.BEHAVIOR_LABELS["INVALID"]
+        valid_mask = labels != BEHAVIOR_LABELS["INVALID"]
         valid_labels = labels[valid_mask]
 
         # 显式定义状态空间：所有有效行为标签（排除INVALID）
         # 使用列表推导式获取所有非INVALID的标签值
-        valid_behavior_ids = [
-            v for k, v in self.BEHAVIOR_LABELS.items() if k != "INVALID"
-        ]
+        valid_behavior_ids = [v for k, v in BEHAVIOR_LABELS.items() if k != "INVALID"]
         # 按顺序排序，确保一致性
         valid_behavior_ids.sort()
         num_clusters = len(valid_behavior_ids)
@@ -1689,7 +1733,7 @@ class PatternIdentifier:
                 - 使用场景：当自动推导的丢包值不完整或不准确时，可手动指定
                 - 示例：valid_loss_values=[0.0, 0.5, 1.0] 表示网络中只有0%、50%和100%三种丢包率
             save_all_columns: 是否保存所有列，包括timestamp等非数值列
-                - 默认值：True，保持向后兼容
+
                 - 设置为False时，只保存数值列（delay*、loss_rate*、bandwidth*），节省存储空间
 
         保存的文件包括：
@@ -1701,10 +1745,11 @@ class PatternIdentifier:
             - transition_matrix_rule_up.json: 上行行为转移矩阵
             - transition_matrix_rule_down.json: 下行行为转移矩阵
             - valid_loss_values.json: 合法丢包值列表
-            - labeled_windows/: 包含每个行为类别的窗口数据，按上下行分离
+            - behavior_{behavior_id}_windows.csv: 按行为类别合并的窗口数据文件
         """
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        del save_all_columns  # 避免未使用参数警告
         method = results["method"]
         labels_up = np.array(results["labels_up"])
         labels_down = np.array(results["labels_down"])
@@ -1715,18 +1760,135 @@ class PatternIdentifier:
             labels_up_file = output_dir / "labels_rule_up.npy"
             np.save(labels_up_file, labels_up)
             logger.info(f"保存上行标签为npy文件: {labels_up_file}")
+            # 生成CSV格式
+            labels_up_df = pd.DataFrame(labels_up, columns=["behavior_label"])
+            labels_up_csv_file = output_dir / "labels_rule_up.csv"
+            labels_up_df.to_csv(labels_up_csv_file, index=False)
+            logger.info(f"保存上行标签为CSV文件: {labels_up_csv_file}")
 
             # 保存下行标签
             labels_down_file = output_dir / "labels_rule_down.npy"
             np.save(labels_down_file, labels_down)
             logger.info(f"保存下行标签为npy文件: {labels_down_file}")
+            # 生成CSV格式
+            labels_down_df = pd.DataFrame(labels_down, columns=["behavior_label"])
+            labels_down_csv_file = output_dir / "labels_rule_down.csv"
+            labels_down_df.to_csv(labels_down_csv_file, index=False)
+            logger.info(f"保存下行标签为CSV文件: {labels_down_csv_file}")
 
             # 保存窗口特征矩阵
             if "features" in results and results["features"]:
                 features = np.array(results["features"])
+                try:
+                    feat_mean = np.mean(features, axis=0)
+                    feat_std = np.std(features, axis=0)
+                    low_var_idx = [int(i) for i, s in enumerate(feat_std) if s < 1e-6]
+                    logger.info("=== 窗口特征矩阵分布统计（逐维） ===")
+                    logger.info(f"  形状: {features.shape}")
+                    logger.info(f"  前10维均值: {feat_mean[:10]}")
+                    logger.info(f"  前10维标准差: {feat_std[:10]}")
+                    if low_var_idx:
+                        logger.warning(
+                            f"  低方差维度（std<1e-6）数量: {len(low_var_idx)}，示例: {low_var_idx[:20]}"
+                        )
+                    else:
+                        logger.info("  未检测到低方差维度（std<1e-6）")
+                    logger.info("=== 特征样本快照（前3行） ===")
+                    logger.info(f"{features[:3]}")
+                except Exception as e:
+                    logger.warning(f"窗口特征矩阵分布统计日志输出失败: {str(e)}")
                 features_file = output_dir / "window_features_rule.npy"
                 np.save(features_file, features)
                 logger.info(f"保存窗口特征矩阵: {features_file}")
+                # 生成CSV格式
+                features_df = pd.DataFrame(
+                    features, columns=[f"feature_{i}" for i in range(features.shape[1])]
+                )
+                features_csv_file = output_dir / "window_features_rule.csv"
+                features_df.to_csv(features_csv_file, index=False)
+                logger.info(f"保存窗口特征矩阵为CSV文件: {features_csv_file}")
+
+                # 生成并保存上下行分开的行为条件映射文件
+
+                # 计算上行行为条件映射
+                behavior_condition_map_up = {}
+                unique_labels_up = np.unique(labels_up)
+                for label in unique_labels_up:
+                    if label == BEHAVIOR_LABELS["INVALID"]:
+                        continue
+                    # 收集上行中包含该行为的窗口索引
+                    window_indices = [
+                        i for i, label_i in enumerate(labels_up) if label_i == label
+                    ]
+                    if window_indices:
+                        all_features_for_label = features[window_indices]
+                        avg_feature = np.mean(all_features_for_label, axis=0)
+                        behavior_condition_map_up[int(label)] = avg_feature
+
+                # 计算下行行为条件映射
+                behavior_condition_map_down = {}
+                unique_labels_down = np.unique(labels_down)
+                for label in unique_labels_down:
+                    if label == BEHAVIOR_LABELS["INVALID"]:
+                        continue
+                    # 收集下行中包含该行为的窗口索引
+                    window_indices = [
+                        i for i, label_i in enumerate(labels_down) if label_i == label
+                    ]
+                    if window_indices:
+                        all_features_for_label = features[window_indices]
+                        avg_feature = np.mean(all_features_for_label, axis=0)
+                        behavior_condition_map_down[int(label)] = avg_feature
+
+                # 保存上行行为条件映射文件
+                condition_map_up_file = output_dir / "behavior_condition_map_up.npy"
+                np.save(condition_map_up_file, behavior_condition_map_up)
+                logger.info(f"保存上行行为条件映射文件: {condition_map_up_file}")
+                logger.info(
+                    f"上行行为条件映射包含 {len(behavior_condition_map_up)} 个行为ID"
+                )
+                # 生成CSV格式
+                if behavior_condition_map_up:
+                    # 转换字典为DataFrame
+                    condition_map_up_df = pd.DataFrame.from_dict(
+                        behavior_condition_map_up, orient="index"
+                    )
+                    condition_map_up_df.index.name = "behavior_id"
+                    condition_map_up_df.columns = [
+                        f"feature_{i}" for i in range(condition_map_up_df.shape[1])
+                    ]
+                    condition_map_up_csv_file = (
+                        output_dir / "behavior_condition_map_up.csv"
+                    )
+                    condition_map_up_df.to_csv(condition_map_up_csv_file)
+                    logger.info(
+                        f"保存上行行为条件映射为CSV文件: {condition_map_up_csv_file}"
+                    )
+
+                # 保存下行行为条件映射文件
+                condition_map_down_file = output_dir / "behavior_condition_map_down.npy"
+                np.save(condition_map_down_file, behavior_condition_map_down)
+                logger.info(f"保存下行行为条件映射文件: {condition_map_down_file}")
+                logger.info(
+                    f"下行行为条件映射包含 {len(behavior_condition_map_down)} 个行为ID"
+                )
+                # 生成CSV格式
+                if behavior_condition_map_down:
+                    # 转换字典为DataFrame
+                    condition_map_down_df = pd.DataFrame.from_dict(
+                        behavior_condition_map_down, orient="index"
+                    )
+                    condition_map_down_df.index.name = "behavior_id"
+                    condition_map_down_df.columns = [
+                        f"feature_{i}" for i in range(condition_map_down_df.shape[1])
+                    ]
+                    condition_map_down_csv_file = (
+                        output_dir / "behavior_condition_map_down.csv"
+                    )
+                    condition_map_down_df.to_csv(condition_map_down_csv_file)
+                    logger.info(
+                        f"保存下行行为条件映射为CSV文件: {condition_map_down_csv_file}"
+                    )
 
         # 保存上行行为统计信息
         behavior_stats_up_file = output_dir / "behavior_statistics_up.json"
@@ -1780,7 +1942,7 @@ class PatternIdentifier:
         if "raw_data" in results and results["raw_data"] is not None:
             raw_data_df = results["raw_data"]
             # 使用工具函数提取合法丢包值
-            from network_simulation.utils.loss_utils import (
+            from network_simulation.utils.utils import (
                 extract_directional_valid_loss_values,
             )
 
@@ -1809,125 +1971,5 @@ class PatternIdentifier:
                         json.dump(valid_loss_values_down, f, indent=2)
                     logger.info(f"保存下行合法丢包值: {valid_loss_down_file}")
 
-                # 保存合并的合法丢包值（兼容旧版本）
-                valid_loss_file = metadata_dir / "valid_loss_values.json"
-                with open(valid_loss_file, "w") as f:
-                    json.dump(valid_loss_values, f, indent=2)
-                logger.info(f"保存合并合法丢包值到metadata目录: {valid_loss_file}")
-
-        # 如果有原始数据，按行为类别保存原始数据片段
-        if (
-            "raw_data" in results
-            and results["raw_data"] is not None
-            and results["window_info"] is not None
-        ):
-            raw_data_df = results["raw_data"]
-            window_info = results["window_info"]
-
-            # 创建labeled_windows目录（方案要求的目录名）
-            labeled_windows_dir = output_dir / "labeled_windows"
-            labeled_windows_dir.mkdir(parents=True, exist_ok=True)
-
-            # 创建上下行子目录
-            labeled_windows_up_dir = labeled_windows_dir / "up"
-            labeled_windows_up_dir.mkdir(parents=True, exist_ok=True)
-
-            labeled_windows_down_dir = labeled_windows_dir / "down"
-            labeled_windows_down_dir.mkdir(parents=True, exist_ok=True)
-
-            # 直接使用window_info中的window_start和window_end，确保与检测阶段完全一致
-            for i in range(len(labels_up)):
-                # 获取当前窗口的起始和结束索引
-                window_start = int(window_info.iloc[i]["window_start"])
-                window_end = int(window_info.iloc[i]["window_end"])
-
-                # 检查窗口有效性
-                if window_start >= window_end or window_end > len(raw_data_df):
-                    logger.warning(
-                        f"保存时跳过无效窗口 {i}: window_start={window_start}, window_end={window_end}, raw_data_length={len(raw_data_df)}"
-                    )
-                    continue
-
-                # 从raw_data_df中提取窗口数据
-                window_data = raw_data_df.iloc[window_start:window_end].copy()
-
-                # 检查是否包含上下行数据
-                has_up_down_data = all(
-                    col in window_data.columns
-                    for col in ["delay1", "loss_rate1", "delay2", "loss_rate2"]
-                )
-
-                # 根据save_all_columns参数过滤列
-                if not save_all_columns:
-                    # 只保存指定前缀的列
-                    allowed_cols = [
-                        col
-                        for col in window_data.columns
-                        if any(
-                            col.startswith(prefix)
-                            for prefix in self.SAVE_ALLOWED_PREFIXES
-                        )
-                    ]
-
-                    # 不符合条件的处理：至少保留timestamp列（如果存在）
-                    if not allowed_cols:
-                        # 至少保留timestamp列（如果存在）
-                        if "timestamp" in window_data.columns:
-                            allowed_cols = ["timestamp"]
-                        else:
-                            logger.debug(
-                                f"窗口 {i} 没有找到匹配前缀的列且无timestamp列，跳过保存"
-                            )
-                            continue
-
-                    window_data = window_data[allowed_cols]
-
-                # 保存上行标签对应的窗口数据
-                label_up = labels_up[i]
-                # 跳过无效窗口
-                if label_up != self.BEHAVIOR_LABELS["INVALID"]:
-                    # 如果该标签的目录不存在，则创建
-                    label_up_dir = labeled_windows_up_dir / str(label_up)
-                    label_up_dir.mkdir(parents=True, exist_ok=True)
-
-                    # 为上行数据选择对应列
-                    if has_up_down_data:
-                        # 上下行数据分离，只保存上行相关列
-                        up_columns = [
-                            col
-                            for col in window_data.columns
-                            if col.endswith("1") or not col.endswith(("1", "2"))
-                        ]
-                        window_data_up = window_data[up_columns]
-                    else:
-                        # 单通道数据，直接使用
-                        window_data_up = window_data.copy()
-
-                    # 将窗口数据保存到CSV文件
-                    window_file_up = label_up_dir / f"window_{i}.csv"
-                    window_data_up.to_csv(window_file_up, index=False)
-
-                # 保存下行标签对应的窗口数据
-                label_down = labels_down[i]
-                # 跳过无效窗口
-                if label_down != self.BEHAVIOR_LABELS["INVALID"]:
-                    # 如果该标签的目录不存在，则创建
-                    label_down_dir = labeled_windows_down_dir / str(label_down)
-                    label_down_dir.mkdir(parents=True, exist_ok=True)
-
-                    # 为下行数据选择对应列
-                    if has_up_down_data:
-                        # 上下行数据分离，只保存下行相关列
-                        down_columns = [
-                            col
-                            for col in window_data.columns
-                            if col.endswith("2") or not col.endswith(("1", "2"))
-                        ]
-                        window_data_down = window_data[down_columns]
-                    else:
-                        # 单通道数据，直接使用
-                        window_data_down = window_data.copy()
-
-                    # 将窗口数据保存到CSV文件
-                    window_file_down = label_down_dir / f"window_{i}.csv"
-                    window_data_down.to_csv(window_file_down, index=False)
+        # 不再生成按行为类别保存的原始数据片段
+        # 用户要求不再生成behavior_*_windows.csv文件

@@ -127,6 +127,7 @@ class FeatureExtractor:
         df: pd.DataFrame,
         normalize: bool = False,
         correlation_threshold: float = 0.8,
+        remove_correlated: bool = True,
     ) -> pd.DataFrame:
         """从处理后的网络数据中提取特征
 
@@ -145,6 +146,9 @@ class FeatureExtractor:
                 - 设置为True时，使用RobustScaler进行归一化
             correlation_threshold (float, optional): 高度相关特征的阈值，大于该值的特征将被去除
                 - 默认值: 0.8
+            remove_correlated (bool, optional): 是否去除高度相关的特征
+                - 默认值: True
+                - 设置为False时，保留所有提取的特征
 
         Returns:
             pd.DataFrame: 包含提取特征的DataFrame，特征列名以"feat_"前缀开头
@@ -176,6 +180,15 @@ class FeatureExtractor:
             raise ValueError(
                 f"Missing required dual-channel columns: {sorted(missing)}. "
                 "This system only supports bidirectional network data (e.g., client↔server)."
+            )
+
+        # 检查输入数据中是否包含NaN值，直接抛出异常
+        if df[required_cols].isnull().values.any():
+            nan_count = df[required_cols].isnull().sum().sum()
+            total_count = df[required_cols].size
+            raise ValueError(
+                f"输入数据中包含 {nan_count} 个NaN值，占总数据的 {(nan_count / total_count) * 100:.2f}%。"
+                f"请检查原始数据或数据处理过程，定位NaN值产生的具体原因。"
             )
 
         # 首先提取合法丢包值
@@ -223,13 +236,18 @@ class FeatureExtractor:
         features_df = pd.DataFrame(features_list)
         logger.info(f"特征提取完成，共提取 {len(features_df)} 条特征记录")
 
-        # 移除高度相关的特征
-        features_df = self.remove_highly_correlated_features(
-            features_df, correlation_threshold
-        )
-        logger.info(
-            f"去除高度相关特征后，剩余特征数: {len([col for col in features_df.columns if col.startswith('feat_')])}"
-        )
+        # 移除高度相关的特征（如果需要）
+        if remove_correlated:
+            features_df = self.remove_highly_correlated_features(
+                features_df, correlation_threshold
+            )
+            logger.info(
+                f"去除高度相关特征后，剩余特征数: {len([col for col in features_df.columns if col.startswith('feat_')])}"
+            )
+        else:
+            logger.info(
+                f"跳过高度相关特征移除，保留所有 {len([col for col in features_df.columns if col.startswith('feat_')])} 个特征"
+            )
 
         # 如果请求则应用归一化
         if normalize:
@@ -349,10 +367,28 @@ class FeatureExtractor:
         upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
 
         # Find features with correlation greater than correlation_threshold
+        # 定义稳定行为检测的关键特征，这些特征永远不会被移除
+        key_stable_features = [
+            "feat_loss1_nonzero_ratio",
+            "feat_loss2_nonzero_ratio",
+            "feat_max_congestion_run1",
+            "feat_max_congestion_run2",
+            "feat_delay1_std",
+            "feat_delay2_std",
+            "feat_loss1_std",
+            "feat_loss2_std",
+            "feat_delay1_mean",
+            "feat_delay2_mean",
+            "feat_loss1_mean",
+            "feat_loss2_mean",
+        ]
+
         to_drop = [
             column
             for column in upper.columns
-            if any(upper[column] > correlation_threshold)
+            # 只移除非关键特征且与其他特征高度相关的特征
+            if column not in key_stable_features
+            and any(upper[column] > correlation_threshold)
         ]
 
         if to_drop:
@@ -402,19 +438,30 @@ class FeatureExtractor:
             col for col in normalized_features.columns if col.startswith("feat_")
         ]
 
-        # 将特征列分为延迟相关和丢包相关
+        # 将特征列分为延迟相关、丢包相关和行为判断相关
+        # 行为判断相关特征（如loss_nonzero_ratio）不进行归一化，保持原始值便于判断
+        behavior_judgment_features = [
+            col for col in feature_columns if "nonzero_ratio" in col
+        ]
+        logger.debug(f"行为判断相关特征: {behavior_judgment_features}")
+
+        # 延迟相关特征（排除行为判断相关特征）
         delay_features = [
             col
             for col in feature_columns
-            if "delay" in col and col in normalized_features.columns
+            if "delay" in col
+            and col in normalized_features.columns
+            and col not in behavior_judgment_features
         ]
         logger.debug(f"延迟相关特征: {delay_features}")
 
+        # 丢包相关特征（排除行为判断相关特征）
         loss_features = [
             col
             for col in feature_columns
             if ("loss" in col or "congestion" in col or "burst" in col)
             and col in normalized_features.columns
+            and col not in behavior_judgment_features
         ]
         logger.debug(f"丢包相关特征: {loss_features}")
 
@@ -835,7 +882,7 @@ class FeatureExtractor:
         )
 
         # 使用公共函数计算连续True序列的最大长度
-        from network_simulation.utils.loss_utils import calculate_max_consecutive_true
+        from network_simulation.utils.utils import calculate_max_consecutive_true
 
         return calculate_max_consecutive_true(congested)
 
@@ -928,8 +975,12 @@ class FeatureExtractor:
 
         # 如果没有精确匹配，找到最接近的合法丢包值
         # 确保 mapping 已初始化，添加明确的断言
-        assert self.loss_mode_mapping, "loss_mode_mapping not initialized. Call extract() first to initialize valid_loss_values."
-        assert self.valid_loss_values, "valid_loss_values not initialized. Call extract() first to initialize valid_loss_values."
+        assert self.loss_mode_mapping, (
+            "loss_mode_mapping not initialized. Call extract() first to initialize valid_loss_values."
+        )
+        assert self.valid_loss_values, (
+            "valid_loss_values not initialized. Call extract() first to initialize valid_loss_values."
+        )
 
         try:
             # 找到最接近的合法丢包值
@@ -1040,31 +1091,36 @@ class FeatureExtractor:
             logger.warning(f"在 {input_dir} 中未找到 .csv 文件")
             raise ValueError(f"No CSV files found in {input_dir}")
 
-        # 合并所有处理后的文件
-        all_processed_df = []
+        # 为每个文件单独提取特征
+        all_features = []
         for processed_file in processed_files:
-            df = self.load_data(processed_file)
-            all_processed_df.append(df)
+            # 跳过合并后的文件，避免重复处理
+            if processed_file.name == "merged_processed_data.csv":
+                continue
 
-        merged_processed_df = pd.concat(all_processed_df, ignore_index=True)
+            # 加载单个文件数据
+            df = self.load_data(processed_file)
+            logger.info(f"处理文件: {processed_file.name}, 样本数: {len(df)}")
+
+            # 提取特征
+            features = self.extract(df)
+
+            # 添加文件标识（使用文件名，不含扩展名）
+            # 收集特征
+            all_features.append(features)
+            logger.info(
+                f"文件 {processed_file.stem} 特征提取完成，特征数: {len(features)}"
+            )
+
+        # 合并所有特征数据
+        merged_features_df = pd.concat(all_features, ignore_index=True)
         logger.info(
-            f"合并了 {len(processed_files)} 个处理后的文件，总样本数: {len(merged_processed_df)}"
+            f"合并了 {len(all_features)} 个文件的特征，总特征数: {len(merged_features_df)}"
         )
 
-        # 保存合并后的文件，供step1_3使用
-        merged_processed_file = input_dir / "merged_processed_data.csv"
-        merged_processed_df.to_csv(merged_processed_file, index=False)
-        logger.info(f"合并后的处理数据已保存到: {merged_processed_file}")
-
-        # 对合并后的文件提取特征
-        features_df = self.extract(merged_processed_df)
-
-        # 添加文件标识
-        features_df["file_id"] = "merged"
-
-        # 保存特征数据
+        # 保存合并后的特征数据
         features_output_file = output_dir / "merged_features.csv"
-        self.save(features_df, features_output_file)
+        self.save(merged_features_df, features_output_file)
 
         logger.info(f"特征提取完成，合并特征已保存到: {features_output_file}")
         return features_output_file

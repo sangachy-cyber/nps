@@ -101,7 +101,7 @@ class BehaviorDiscoveryPipeline:
         """运行step1.2：提取特征
 
         从处理后的数据中提取网络行为特征，支持处理单个文件或目录下的多个文件。
-        对于目录情况，会先合并所有处理后的文件，然后提取特征并保存。
+        对于目录情况，会直接处理所有文件，合并特征后保存。
 
         Args:
             input_processed_path (Path): 处理后的数据文件或目录路径
@@ -128,15 +128,18 @@ class BehaviorDiscoveryPipeline:
             # 处理单个文件
             df = pd.read_csv(input_processed_path, parse_dates=["timestamp"])
             features_df = self.feature_extractor.extract(df)
-            # 添加文件标识
-            features_df["file_id"] = input_processed_path.stem
             # 保存特征数据
             features_output_file = (
                 output_features_dir / f"{input_processed_path.stem}_features.csv"
             )
             self.feature_extractor.save(features_df, features_output_file)
+
+            # 保存合并后的特征文件（单个文件时也生成合并特征）
+            merged_features_file = output_features_dir / self.MERGED_FEATURES_FILENAME
+            self.feature_extractor.save(features_df, merged_features_file)
+            logger.info(f"已将特征保存到 {merged_features_file}")
         elif input_processed_path.is_dir():
-            # 处理目录，合并所有处理后的文件
+            # 处理目录，为每个文件提取特征并合并
             processed_files = sorted(
                 list(input_processed_path.glob("*.csv")), key=lambda x: x.name
             )
@@ -144,44 +147,60 @@ class BehaviorDiscoveryPipeline:
                 logger.warning(f"在 {input_processed_path} 中未找到 .csv 文件")
                 return
 
-            # 合并所有处理后的文件
-            all_processed_df = []
+            # 为每个文件提取特征，不进行相关性移除
+            all_features = []
             for processed_file in processed_files:
+                logger.info(f"正在处理文件: {processed_file.name}")
                 df = pd.read_csv(processed_file, parse_dates=["timestamp"])
-                all_processed_df.append(df)
+                # 提取原始特征，不进行相关性移除，不进行归一化
+                features_df = self.feature_extractor.extract(
+                    df, remove_correlated=False, normalize=False
+                )  # 不进行相关性移除，不进行归一化，后续统一归一化
+                all_features.append(features_df)
+                logger.info(
+                    f"文件 {processed_file.stem} 特征提取完成，特征数: {len(features_df)}"
+                )
 
-            # 合并为一个DataFrame
-            merged_processed_df = pd.concat(all_processed_df, ignore_index=True)
-            logger.info(
-                f"合并了 {len(processed_files)} 个处理后的文件，总样本数: {len(merged_processed_df)}"
-            )
-
-            # 检查合并后的数据是否为空
-            if merged_processed_df.empty:
-                logger.error("No valid data found after merging input files.")
+            # 合并所有特征
+            if not all_features:
+                logger.error("No valid features found after processing all files.")
                 return
 
-            # 保存合并后的文件，供后续使用
-            merged_processed_file = (
-                input_processed_path / self.MERGED_PROCESSED_FILENAME
+            merged_features_df = pd.concat(all_features, ignore_index=True)
+            logger.info(
+                f"合并了 {len(processed_files)} 个文件的特征，总特征数: {len(merged_features_df)}"
             )
-            merged_processed_df.to_csv(merged_processed_file, index=False)
-            logger.info(f"合并后的处理数据已保存到: {merged_processed_file}")
 
-            # 提取特征
-            features_df = self.feature_extractor.extract(merged_processed_df)
-            # 添加文件标识
-            features_df["file_id"] = "merged"
-            # 保存特征数据
-            features_file = output_features_dir / "merged_processed_data_features.csv"
-            self.feature_extractor.save(features_df, features_file)
+            # 对合并后的特征统一移除高度相关的特征
+            merged_features_df = (
+                self.feature_extractor.remove_highly_correlated_features(
+                    merged_features_df, correlation_threshold=0.8
+                )
+            )
+            logger.info(
+                f"统一移除高度相关特征后，剩余特征数: {len([col for col in merged_features_df.columns if col.startswith('feat_')])}"
+            )
 
             # 保存合并后的特征文件
             merged_features_file = output_features_dir / self.MERGED_FEATURES_FILENAME
-            import shutil
+            self.feature_extractor.save(merged_features_df, merged_features_file)
+            logger.info(f"已将合并特征保存到 {merged_features_file}")
 
-            shutil.copy2(features_file, merged_features_file)
-            logger.info(f"已将合并数据的特征保存到 {merged_features_file}")
+            # 对每个文件的特征统一进行相关性移除并保存
+            for i, (processed_file, raw_features_df) in enumerate(
+                zip(processed_files, all_features)
+            ):
+                # 只保留与合并特征相同的列
+                aligned_features_df = raw_features_df[
+                    raw_features_df.columns.intersection(merged_features_df.columns)
+                ]
+
+                # 保存单个文件的特征
+                single_features_file = (
+                    output_features_dir / f"{processed_file.stem}_features.csv"
+                )
+                self.feature_extractor.save(aligned_features_df, single_features_file)
+                logger.info(f"已保存对齐后的特征到 {single_features_file}")
 
     def run_step1_3(
         self,
@@ -192,7 +211,7 @@ class BehaviorDiscoveryPipeline:
         """运行step1.3：发现行为模式
 
         基于提取的特征数据发现网络行为模式，支持处理单个文件对或目录情况。
-        对于目录情况，会使用合并后的特征文件和处理数据文件。
+        对于目录情况，会使用合并后的特征文件进行分析。
 
         Args:
             input_features_path (Path): 特征数据文件或目录路径
@@ -219,30 +238,38 @@ class BehaviorDiscoveryPipeline:
 
         # 处理目录情况
         if input_features_path.is_dir() and input_processed_path.is_dir():
-            # 使用合并后的特征文件
-            merged_features_file = input_features_path / self.MERGED_FEATURES_FILENAME
-            if not merged_features_file.exists():
-                logger.error(
-                    f"在 {input_features_path} 中未找到 {self.MERGED_FEATURES_FILENAME}"
-                )
-                logger.error("请先运行特征提取脚本生成合并特征文件")
+            # 获取所有特征文件和处理后的数据文件
+            feature_files = sorted(
+                list(input_features_path.glob("*.csv")), key=lambda x: x.name
+            )
+            processed_files = sorted(
+                list(input_processed_path.glob("*.csv")), key=lambda x: x.name
+            )
+
+            # 排除merged_features.csv，处理每个原始文件
+            feature_files = [
+                f for f in feature_files if f.name != self.MERGED_FEATURES_FILENAME
+            ]
+
+            if not feature_files or not processed_files:
+                logger.error("在输入目录中未找到足够的文件")
                 return
 
-            # 检查是否存在合并后的处理数据
-            merged_processed_file = (
-                input_processed_path / self.MERGED_PROCESSED_FILENAME
-            )
-            if not merged_processed_file.exists():
-                logger.error(
-                    f"在 {input_processed_path} 中未找到 {self.MERGED_PROCESSED_FILENAME}"
-                )
-                logger.error("请先运行数据处理脚本生成合并处理数据")
-                return
+            # 处理每个文件对
+            for feature_file, processed_file in zip(feature_files, processed_files):
+                # 确保文件名匹配
+                feature_name = feature_file.stem.replace("_features", "")
+                processed_name = processed_file.stem
 
-            # 使用合并后的特征和处理数据
-            self.pattern_identifier.identify_and_save(
-                merged_features_file, merged_processed_file, output_patterns_dir
-            )
+                if feature_name == processed_name:
+                    logger.info(f"处理文件对: {feature_name}")
+                    self.pattern_identifier.identify_and_save(
+                        feature_file, processed_file, output_patterns_dir
+                    )
+                else:
+                    logger.warning(
+                        f"文件名不匹配: {feature_file.name} 和 {processed_file.name}，跳过此文件对"
+                    )
         elif input_features_path.is_file() and input_processed_path.is_file():
             # 处理单个文件对
             self.pattern_identifier.identify_and_save(

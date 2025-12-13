@@ -155,7 +155,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         return f'<img src="data:image/png;base64,{img_base64}" alt="PCA 方差解释图">'
 
     def visualize_tsne_scatter(
-        self, X: np.ndarray, labels: np.ndarray, method: str
+        self, X: np.ndarray, labels: np.ndarray, method: str, optimize: str = "balanced"
     ) -> str:
         """可视化t-SNE散点图并返回HTML片段
 
@@ -166,6 +166,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             X (np.ndarray): 特征矩阵，shape (n_samples, n_features)
             labels (np.ndarray): 行为标签数组，shape (n_samples,)
             method (str): 可视化方法名称，用于区分不同的可视化结果
+            optimize: 优化模式，可选值："fast"、"balanced"、"detailed"，默认为"balanced"
 
         Returns:
             str: 包含t-SNE散点图和统计摘要的HTML片段
@@ -177,7 +178,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             >>> feature_visualizer = FeatureSpaceVisualizer(Path("output/visualizations"))
             >>> X = np.random.randn(100, 12)
             >>> labels = np.random.randint(0, 3, 100)
-            >>> html = feature_visualizer.visualize_tsne_scatter(X, labels, "rule")
+            >>> html = feature_visualizer.visualize_tsne_scatter(X, labels, "rule", "balanced")
             >>> print(html[:100])  # 显示HTML片段的前100个字符
         """
         # 检查是否所有标签都是INVALID (-1)
@@ -187,11 +188,41 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             )
             return "<p>无有效行为标签，跳过t-SNE散点图可视化。</p>"
 
-        # 执行t-SNE
-        perplexity = 30
-        max_iter = 300
+        # 数据采样：对于大数据集，根据优化模式进行采样
+        if len(X) > 1000:
+            if optimize == "fast":
+                sample_size = 500
+            elif optimize == "balanced":
+                sample_size = 1000
+            else:
+                sample_size = min(2000, len(X))  # 详细模式最多采样2000个样本
+
+            # 随机采样
+            indices = np.random.choice(len(X), sample_size, replace=False)
+            X = X[indices]
+            labels = labels[indices]
+            logger.info(f"t-SNE数据采样：{sample_size}个样本")
+
+        # 根据优化模式调整t-SNE参数
+        if optimize == "fast":
+            perplexity = min(15, len(X) - 1)
+            max_iter = 250  # TSNE要求max_iter至少为250
+            learning_rate = 200
+        elif optimize == "balanced":
+            perplexity = min(30, len(X) - 1)
+            max_iter = 500
+            learning_rate = 200
+        else:
+            perplexity = min(50, len(X) - 1)
+            max_iter = 1000
+            learning_rate = 200
+
         tsne = TSNE(
-            n_components=2, random_state=42, perplexity=perplexity, max_iter=max_iter
+            n_components=2,
+            random_state=42,
+            perplexity=perplexity,
+            max_iter=max_iter,
+            learning_rate=learning_rate,
         )
         X_tsne = tsne.fit_transform(X)
 
@@ -225,7 +256,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         return f'<img src="data:image/png;base64,{img_base64}" alt="t-SNE 散点图">{summary}'
 
     def visualize_umap_scatter(
-        self, X: np.ndarray, labels: np.ndarray, method: str
+        self, X: np.ndarray, labels: np.ndarray, method: str, optimize: str = "balanced"
     ) -> str:
         """可视化UMAP散点图并返回HTML片段
 
@@ -236,6 +267,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             X (np.ndarray): 特征矩阵，shape (n_samples, n_features)
             labels (np.ndarray): 行为标签数组，shape (n_samples,)
             method (str): 可视化方法名称，用于区分不同的可视化结果
+            optimize: 优化模式，可选值："fast"、"balanced"、"detailed"，默认为"balanced"
 
         Returns:
             str: 包含UMAP散点图和统计摘要的HTML片段
@@ -247,7 +279,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             >>> feature_visualizer = FeatureSpaceVisualizer(Path("output/visualizations"))
             >>> X = np.random.randn(100, 12)
             >>> labels = np.random.randint(0, 3, 100)
-            >>> html = feature_visualizer.visualize_umap_scatter(X, labels, "rule")
+            >>> html = feature_visualizer.visualize_umap_scatter(X, labels, "rule", "balanced")
             >>> print(html[:100])  # 显示HTML片段的前100个字符
         """
         # 检查是否所有标签都是INVALID (-1)
@@ -257,11 +289,42 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             )
             return "<p>无有效行为标签，跳过UMAP散点图可视化。</p>"
 
-        # 执行UMAP
-        n_neighbors = 15
-        min_dist = 0.1
+        # 数据采样：对于大数据集，根据优化模式进行采样
+        if len(X) > 1000:
+            if optimize == "fast":
+                sample_size = 500
+            elif optimize == "balanced":
+                sample_size = 1000
+            else:
+                sample_size = min(2000, len(X))  # 详细模式最多采样2000个样本
+
+            # 随机采样
+            indices = np.random.choice(len(X), sample_size, replace=False)
+            X = X[indices]
+            labels = labels[indices]
+            logger.info(f"UMAP数据采样：{sample_size}个样本")
+
+        # 根据优化模式调整UMAP参数
+        if optimize == "fast":
+            n_neighbors = min(10, len(X) - 1)
+            min_dist = 0.3
+            n_epochs = 50
+        elif optimize == "balanced":
+            n_neighbors = min(15, len(X) - 1)
+            min_dist = 0.1
+            n_epochs = 200
+        else:
+            n_neighbors = min(30, len(X) - 1)
+            min_dist = 0.1
+            n_epochs = 500
+
         umap = UMAP(
-            n_components=2, random_state=42, n_neighbors=n_neighbors, min_dist=min_dist
+            n_components=2,
+            random_state=42,
+            n_neighbors=n_neighbors,
+            min_dist=min_dist,
+            n_epochs=n_epochs,
+            verbose=False,
         )
         X_umap = umap.fit_transform(X)
 
@@ -304,6 +367,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         output_dir: Path,
         feature_names: List[str] = None,
         direction: str = "up",
+        optimize: str = "balanced",
     ) -> None:
         """生成行为分离可视化图表
 
@@ -315,6 +379,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             output_dir (Path): 输出目录路径
             feature_names (List[str], optional): 特征名称列表，默认为None
             direction (str, optional): 方向，"up"表示上行数据，"down"表示下行数据，默认为"up"
+            optimize: 优化模式，可选值："fast"、"balanced"、"detailed"，默认为"balanced"
 
         Examples:
             >>> from network_simulation.visualization.feature_space_visualizer import FeatureSpaceVisualizer
@@ -325,7 +390,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             >>> labels = np.random.randint(0, 3, 100)
             >>> feature_names = ["delay1_mean", "delay2_mean", "loss1_mean", "loss2_mean", "ratio", "symmetry"]
             >>> output_dir = Path("output/visualizations/behavior_separation")
-            >>> feature_visualizer.generate_behavior_separation_plots(X, labels, output_dir, feature_names, "up")
+            >>> feature_visualizer.generate_behavior_separation_plots(X, labels, output_dir, feature_names, "up", "balanced")
         """
         # 检查是否所有标签都是INVALID (-1)
         if len(np.unique(labels)) == 1 and np.unique(labels)[0] == -1:
@@ -333,6 +398,9 @@ class FeatureSpaceVisualizer(BaseVisualizer):
                 "All labels are INVALID (-1), skipping behavior separation plots."
             )
             return
+
+        # 根据优化模式调整DPI
+        dpi = 150 if optimize == "fast" else 200 if optimize == "balanced" else 300
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -362,7 +430,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
 
         # 使用过滤后的特征名称或默认名称
         if feature_names is None:
-            feature_names = [f"特征 {i+1}" for i in range(X.shape[1])]
+            feature_names = [f"特征 {i + 1}" for i in range(X.shape[1])]
 
         # 特征分布箱线图
         n_features = X.shape[1]
@@ -382,7 +450,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         plt.tight_layout()
         plt.savefig(
             output_dir / f"{direction}_feature_distributions.png",
-            dpi=300,
+            dpi=dpi,
             bbox_inches="tight",
         )
         plt.close()
@@ -404,7 +472,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             plt.tight_layout()
             plt.savefig(
                 output_dir / f"{direction}_feature_correlation.png",
-                dpi=300,
+                dpi=dpi,
                 bbox_inches="tight",
             )
             plt.close()
@@ -417,6 +485,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         output_dir: Path,
         _feature_names: List[str],
         direction: str = "up",
+        optimize: str = "balanced",
     ) -> None:
         """保存特征空间降维图
 
@@ -429,6 +498,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             output_dir (Path): 输出目录路径
             _feature_names (List[str]): 特征名称列表（未使用）
             direction (str, optional): 方向，"up"表示上行数据，"down"表示下行数据，默认为"up"
+            optimize: 优化模式，可选值："fast"、"balanced"、"detailed"，默认为"balanced"
 
         Examples:
             >>> from network_simulation.visualization.feature_space_visualizer import FeatureSpaceVisualizer
@@ -438,7 +508,7 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             >>> X = np.random.randn(100, 12)
             >>> labels = list(np.random.randint(0, 3, 100))
             >>> output_dir = Path("output/visualizations/feature_space")
-            >>> feature_visualizer.save_feature_space_visualizations(X, labels, "rule", output_dir, None, "up")
+            >>> feature_visualizer.save_feature_space_visualizations(X, labels, "rule", output_dir, None, "up", "balanced")
         """
         labels = np.array(labels)
 
@@ -449,7 +519,43 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             )
             return
 
+        # 根据优化模式调整DPI
+        dpi = 150 if optimize == "fast" else 200 if optimize == "balanced" else 300
+
+        # 为t-SNE和UMAP准备采样数据
+        # 数据采样：对于大数据集，根据优化模式进行采样
+        if len(X) > 1000:
+            sample_size = (
+                500
+                if optimize == "fast"
+                else 1000
+                if optimize == "balanced"
+                else min(2000, len(X))
+            )
+
+            # 随机采样
+            indices = np.random.choice(len(X), sample_size, replace=False)
+            X_sampled = X[indices]
+            labels_sampled = labels[indices]
+            logger.info(f"特征空间可视化数据采样：{sample_size}个样本")
+        else:
+            X_sampled = X
+            labels_sampled = labels
+
+        # 检查是否存在NaN值，直接抛出异常以便定位问题
+        if np.isnan(X).any():
+            nan_count = np.isnan(X).sum()
+            total_count = X.size
+            raise ValueError(
+                f"特征数据中包含 {nan_count} 个NaN值，占总数据的 {(nan_count / total_count) * 100:.2f}%。"
+                f"请检查特征提取过程，定位NaN值产生的具体原因。"
+            )
+
         # 保存PCA散点图
+        # 确保至少有2个样本用于PCA
+        if len(X) < 2:
+            logger.warning(f"样本数量不足，无法生成PCA散点图: 样本数={len(X)}")
+            return
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X)
         self._create_scatter_plot(
@@ -460,10 +566,17 @@ class FeatureSpaceVisualizer(BaseVisualizer):
             ylabel=f"PCA 维度 2 ({pca.explained_variance_ratio_[1]:.2%} 方差)",
             show_evolution=True,
         )
-        self._save_plot(output_dir / f"{direction}_pca_scatter.png")
+        self._save_plot(output_dir / f"{direction}_pca_scatter.png", dpi=dpi)
 
         # 保存PCA方差解释图
-        pca = PCA(n_components=min(8, X.shape[1]))
+        # 确保n_components不超过样本数量和特征数量中的较小值
+        max_pca_components = min(8, X.shape[1], len(X))
+        if max_pca_components < 1:
+            logger.warning(
+                f"样本数量不足，无法生成PCA方差解释图: 样本数={len(X)}, 特征数={X.shape[1]}"
+            )
+            return
+        pca = PCA(n_components=max_pca_components)
         pca.fit(X)
         plt.figure(figsize=(10, 8))
         explained_variance = pca.explained_variance_ratio_
@@ -488,40 +601,71 @@ class FeatureSpaceVisualizer(BaseVisualizer):
         plt.legend(loc="best")
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
-        self._save_plot(output_dir / f"{direction}_pca_variance.png")
+        self._save_plot(output_dir / f"{direction}_pca_variance.png", dpi=dpi)
 
         # 保存t-SNE散点图
         # 只有当样本数量大于perplexity时才运行t-SNE
-        if len(X) > 10:  # 确保有足够的样本
-            perplexity = min(30, len(X) - 1)  # perplexity必须小于样本数量
+        if len(X_sampled) > 10:  # 确保有足够的样本
+            # 根据优化模式调整t-SNE参数
+            if optimize == "fast":
+                perplexity = min(15, len(X_sampled) - 1)
+                max_iter = 250  # TSNE要求max_iter至少为250
+            elif optimize == "balanced":
+                perplexity = min(30, len(X_sampled) - 1)
+                max_iter = 500
+            else:
+                perplexity = min(50, len(X_sampled) - 1)
+                max_iter = 1000
+
             tsne = TSNE(
-                n_components=2, random_state=42, perplexity=perplexity, max_iter=300
+                n_components=2,
+                random_state=42,
+                perplexity=perplexity,
+                max_iter=max_iter,
             )
-            X_tsne = tsne.fit_transform(X)
+            X_tsne = tsne.fit_transform(X_sampled)
             self._create_scatter_plot(
                 X_transformed=X_tsne,
-                labels=labels,
+                labels=labels_sampled,
                 title=f"{direction.upper()} 行为特征 t-SNE 降维图",
                 xlabel="t-SNE 维度 1",
                 ylabel="t-SNE 维度 2",
                 show_evolution=True,
             )
-            self._save_plot(output_dir / f"{direction}_tsne.png")
+            self._save_plot(output_dir / f"{direction}_tsne.png", dpi=dpi)
 
         # 保存UMAP散点图
         # 只有当样本数量大于n_neighbors时才运行UMAP
-        if len(X) > 10:  # 确保有足够的样本
-            n_neighbors = min(15, len(X) - 1)  # n_neighbors必须小于样本数量
+        if len(X_sampled) > 10:  # 确保有足够的样本
+            # 根据优化模式调整UMAP参数
+            if optimize == "fast":
+                n_neighbors = min(10, len(X_sampled) - 1)
+                min_dist = 0.3
+                n_epochs = 50
+            elif optimize == "balanced":
+                n_neighbors = min(15, len(X_sampled) - 1)
+                min_dist = 0.1
+                n_epochs = 200
+            else:
+                n_neighbors = min(30, len(X_sampled) - 1)
+                min_dist = 0.1
+                n_epochs = 500
+
             umap = UMAP(
-                n_components=2, random_state=42, n_neighbors=n_neighbors, min_dist=0.1
+                n_components=2,
+                random_state=42,
+                n_neighbors=n_neighbors,
+                min_dist=min_dist,
+                n_epochs=n_epochs,
+                verbose=False,
             )
-            X_umap = umap.fit_transform(X)
+            X_umap = umap.fit_transform(X_sampled)
             self._create_scatter_plot(
                 X_transformed=X_umap,
-                labels=labels,
+                labels=labels_sampled,
                 title=f"{direction.upper()} 行为特征 UMAP 降维图",
                 xlabel="UMAP 维度 1",
                 ylabel="UMAP 维度 2",
                 show_evolution=True,
             )
-            self._save_plot(output_dir / f"{direction}_umap.png")
+            self._save_plot(output_dir / f"{direction}_umap.png", dpi=dpi)
